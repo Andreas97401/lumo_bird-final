@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Dimensions, Easing, StyleSheet, Text, TouchableOpacity, View, SafeAreaView } from 'react-native';
+import { Animated, Dimensions, Easing, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 const NAME_WIDTH = 300;
@@ -154,7 +154,7 @@ export default function HomeScreen() {
               <TouchableOpacity style={[styles.button, styles.loginButton]} onPress={() => router.push('/LoginScreen')}>
                 <Text style={styles.buttonText}>Se connecter</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.button, styles.signupButton]}>
+              <TouchableOpacity style={[styles.button, styles.signupButton]} onPress={() => router.push('/RegisterScreen')}>
                 <Text style={styles.buttonText}>S'inscrire</Text>
               </TouchableOpacity>
             </Animated.View>
