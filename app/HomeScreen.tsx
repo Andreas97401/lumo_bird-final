@@ -1,11 +1,15 @@
 import React, { useRef, useState } from 'react';
-import { Animated, Dimensions, Image, ImageBackground, NativeScrollEvent, NativeSyntheticEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, ImageBackground, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import BottomNavBar from '../components/BottomNavBar';
+
+const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
 const { width, height } = Dimensions.get('window');
-const CURVE_HEIGHT = height * 3; // Much taller scroll area
+const statusBarHeight = StatusBar.currentHeight || 0;
+const CURVE_HEIGHT = height * 3;
 const CURVE_WIDTH = width;
-const AMPLITUDE = width * 0.28; // Amplitude for horizontal offset
+const AMPLITUDE = width * 0.28;
 const LEVEL_COUNT = 8;
 const INTERVAL = CURVE_HEIGHT / (LEVEL_COUNT + 1);
 const CIRCLE_RADIUS = 32;
@@ -15,22 +19,19 @@ const EXPANDED_COLOR = '#fff';
 const TEXT_COLOR = '#71ABA4';
 const EXPANDED_TEXT_COLOR = '#3A5A6A';
 const ORANGE = '#FD8B5A';
-const OSCILLATIONS = 3; // Increase for more oscillations
+const OSCILLATIONS = 3;
 
 function getSineX(y: number) {
-  // y in [0, CURVE_HEIGHT], output x in [center - amplitude, center + amplitude]
   return CURVE_WIDTH / 2 + AMPLITUDE * Math.sin((y / CURVE_HEIGHT) * 2 * Math.PI * OSCILLATIONS);
 }
 
-// LevelCircle component, expandable
 function LevelCircle({
-  y, number, isSelected, onPress, children
+  y, number, isSelected, onPress
 }: {
   y: number;
   number: number;
   isSelected: boolean;
   onPress: () => void;
-  children?: React.ReactNode;
 }) {
   const x = getSineX(y);
   return (
@@ -68,7 +69,6 @@ function LevelCircle({
           </View>
         )}
       </TouchableOpacity>
-      {/* Placeholder for future task list */}
       {isSelected && (
         <View style={styles.taskListPlaceholder}>
           <Text style={{ color: '#888', fontSize: 16, marginTop: 8 }}>[Liste de tâches ici]</Text>
@@ -81,28 +81,25 @@ function LevelCircle({
 export default function HomeScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const [selected, setSelected] = useState(0);
+  const [selectedTab, setSelectedTab] = useState(2); // Default to center
 
-  // Calculate y positions for each level
   const levels = Array.from({ length: LEVEL_COUNT }, (_, i) => {
-    const y = INTERVAL * (i + 1);
+    const y = CURVE_HEIGHT - INTERVAL * (i + 1);
     return { y, number: i + 1 };
   });
 
-  // Path for the vertical sine curve
   const path = Array.from({ length: 200 }, (_, i) => {
-    const y = (i / 199) * CURVE_HEIGHT;
+    const y = CURVE_HEIGHT - (i / 199) * CURVE_HEIGHT;
     const x = getSineX(y);
     return `${i === 0 ? 'M' : 'L'}${x},${y}`;
   }).join(' ');
 
-  // Handle scroll to animate selected level
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
     {
       useNativeDriver: false,
       listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
         const y = e.nativeEvent.contentOffset.y;
-        // Find the closest level to the center of the screen
         let minDist = Infinity;
         let minIdx = 0;
         for (let i = 0; i < levels.length; i++) {
@@ -118,48 +115,64 @@ export default function HomeScreen() {
   );
 
   return (
-    <ImageBackground source={require('../assets/images/QUÊTE.png')} style={{ flex: 1, width: '100%', height: '100%' }} resizeMode="cover">
-      <View style={{ flex: 1 }}>
-        <Animated.ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ height: CURVE_HEIGHT + height }}
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onScroll={handleScroll}
-        >
-          <View style={{ width: CURVE_WIDTH, height: CURVE_HEIGHT, position: 'absolute' }}>
-            <Svg width={CURVE_WIDTH} height={CURVE_HEIGHT} style={{ position: 'absolute' }}>
-              <Path d={path} stroke={ORANGE} strokeWidth={3} fill="none" />
-            </Svg>
-            {levels.map((level, i) => (
-              <LevelCircle
-                key={i}
-                y={level.y}
-                number={level.number}
-                isSelected={i === selected}
-                onPress={() => setSelected(i)}
-              />
-            ))}
-          </View>
-        </Animated.ScrollView>
-      </View>
-      {/* Bottom Navigation Bar */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.navIcon}>
-          <Image source={require('../assets/images/Chart_Line.png')} style={styles.iconImage} resizeMode="contain" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navIcon}>
-          <Image source={require('../assets/images/Calque_2.png')} style={styles.iconImage} resizeMode="contain" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navIcon}>
-          <Image source={require('../assets/images/Users_Group.png')} style={styles.iconImage} resizeMode="contain" />
-        </TouchableOpacity>
-      </View>
-    </ImageBackground>
+    <>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <ImageBackground
+        source={require('../assets/images/Untitled.png')}
+        style={styles.container}
+        resizeMode="cover"
+      >
+        <View style={styles.content}>
+          <AnimatedScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={handleScroll}
+          >
+            <View style={styles.curveContainer}>
+              <Svg width={CURVE_WIDTH} height={CURVE_HEIGHT} style={{ position: 'absolute' }}>
+                <Path d={path} stroke={ORANGE} strokeWidth={3} fill="none" />
+              </Svg>
+              {levels.map((level, i) => (
+                <LevelCircle
+                  key={i}
+                  y={level.y}
+                  number={level.number}
+                  isSelected={i === selected}
+                  onPress={() => setSelected(i)}
+                />
+              ))}
+            </View>
+          </AnimatedScrollView>
+        </View>
+        <BottomNavBar selectedIndex={selectedTab} onSelect={setSelectedTab} />
+      </ImageBackground>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    width: width,
+    height: height + statusBarHeight,
+    paddingTop: statusBarHeight,
+  },
+  content: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    height: CURVE_HEIGHT + height,
+  },
+  curveContainer: {
+    width: CURVE_WIDTH,
+    height: CURVE_HEIGHT,
+    position: 'absolute',
+  },
   levelCircle: {
     position: 'absolute',
     alignItems: 'center',
@@ -216,4 +229,4 @@ const styles = StyleSheet.create({
     color: '#fff',
     opacity: 0.9,
   },
-}); 
+});
