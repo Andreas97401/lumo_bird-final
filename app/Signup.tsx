@@ -1,7 +1,8 @@
 import { createUser } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Alert, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Text } from '../components/Text';
 
 const GENRE_OPTIONS = ['Homme', 'Femme', 'Je préfère ne pas le dire'];
 
@@ -29,6 +30,8 @@ export default function RegisterScreen() {
   const buttonScale = useRef(new Animated.Value(1)).current;
   const modalScale = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+  // Ajout d'un état pour le modal de succès
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Validation des champs
   const validateField = (name: string, value: string) => {
@@ -123,16 +126,7 @@ export default function RegisterScreen() {
       });
 
       if (result.success) {
-        Alert.alert(
-          'Inscription réussie ! 🎉', 
-          `Bonjour ${formData.prenom} !\n\n✅ Votre compte a été créé avec succès.\n📧 Un email de confirmation a été envoyé à ${formData.email}.\n\n📝 Prochaines étapes :\n• Vérifiez votre boîte mail\n• Cliquez sur le lien de confirmation\n• Revenez ici pour vous connecter\n\nUne fois votre email confirmé, vous pourrez vous connecter avec vos identifiants.`,
-          [
-            {
-              text: 'Compris !',
-              onPress: () => router.push('/LoginScreen')
-            }
-          ]
-        );
+        setShowSuccessModal(true);
       } else {
         Alert.alert('Erreur', `Erreur lors de la création du compte: ${result.error}`);
       }
@@ -256,6 +250,13 @@ export default function RegisterScreen() {
             </Animated.View>
           </Pressable>
 
+          {/* Lien vers la connexion */}
+          <TouchableOpacity onPress={() => router.push('/LoginScreen')} style={{ alignSelf: 'center', marginTop: 18 }}>
+            <Text style={{ color: '#C6E7E2', fontSize: 15, textDecorationLine: 'underline' }}>
+              Déjà un compte ? Connectez-vous
+            </Text>
+          </TouchableOpacity>
+
           {/* Modal pour le choix du genre */}
           <Modal
             visible={showGenderModal}
@@ -298,6 +299,33 @@ export default function RegisterScreen() {
               </Animated.View>
             </TouchableOpacity>
           </Modal>
+
+          {/* Modal de succès esthétique */}
+          <Modal
+            visible={showSuccessModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowSuccessModal(false)}
+          >
+            <View style={{ flex: 1, backgroundColor: 'rgba(4,24,54,0.85)', justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{ backgroundColor: '#0A2547', borderRadius: 20, padding: 32, alignItems: 'center', marginHorizontal: 32, borderWidth: 1, borderColor: '#71ABA4' }}>
+                <Text style={{ fontSize: 32, marginBottom: 12, color: '#71ABA4' }}>🎉</Text>
+                <Text style={{ fontSize: 22, color: '#C6E7E2', fontWeight: 'bold', marginBottom: 10, textAlign: 'center', fontFamily: 'Righteous' }}>Inscription réussie !</Text>
+                <Text style={{ fontSize: 16, color: '#C6E7E2', textAlign: 'center', marginBottom: 24 }}>
+                  Vérifie ta boîte mail et clique sur le lien de confirmation pour activer ton compte.
+                </Text>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#FD8B5A', borderRadius: 8, paddingHorizontal: 32, paddingVertical: 12, marginTop: 8 }}
+                  onPress={() => {
+                    setShowSuccessModal(false);
+                    router.push('/LoginScreen');
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>OK</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </View>
       </KeyboardAvoidingView>
     </TouchableWithoutFeedback>
@@ -320,6 +348,7 @@ const styles = StyleSheet.create({
     color: '#C6E7E2',
     marginBottom: 32,
     fontWeight: 'bold',
+    fontFamily: 'Righteous', // AJOUTE cette ligne
   },
   form: {
     marginBottom: 32,

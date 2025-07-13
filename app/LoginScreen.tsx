@@ -1,7 +1,8 @@
 import { signIn, supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Dimensions, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Dimensions, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Text } from '../components/Text';
 
 const { width, height } = Dimensions.get('window');
 
@@ -44,29 +45,28 @@ export default function LoginScreen() {
       const result = await signIn(email, password);
       
       if (result.success) {
-        // Récupérer le profil utilisateur pour afficher le nom
+        // Récupérer l'utilisateur
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from('user_profiles')
-            .select('prenom')
-            .eq('id', user.id)
-            .single();
-          
-          const userName = profile?.prenom || email.split('@')[0];
-          
-          Alert.alert(
-            'Connexion réussie !', 
-            `Bienvenue ${userName} ! Vous allez être redirigé vers votre espace personnel.`,
-            [
-              {
-                text: 'OK',
-                onPress: () => router.push('/HomeScreen')
-              }
-            ]
-          );
+        if (!user) {
+          Alert.alert('Erreur', "Utilisateur non trouvé après connexion.");
+          setIsLoading(false);
+          return;
+        }
+        // Récupérer le profil utilisateur dans user_profiles
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('first_connection')
+          .eq('id', user.id)
+          .single();
+        if (profileError) {
+          Alert.alert('Erreur', "Impossible de récupérer le profil utilisateur.");
+          setIsLoading(false);
+          return;
+        }
+        if (profile?.first_connection) {
+          router.push('/OnboardingScreen');
         } else {
-          router.push('/HomePage');
+          router.push('/HomeScreen');
         }
       } else {
         Alert.alert('Erreur', `Erreur de connexion: ${result.error}`);
@@ -127,11 +127,6 @@ export default function LoginScreen() {
             <TouchableOpacity style={styles.switchButton} onPress={handleSignup}>
               <Text style={styles.switchButtonText}>Pas encore de compte ? S'inscrire</Text>
             </TouchableOpacity>
-            <View style={styles.helpContainer}>
-              <Text style={styles.helpText}>
-                💡 Après inscription, vérifiez votre email et cliquez sur le lien de confirmation avant de vous connecter.
-              </Text>
-            </View>
           </Animated.View>
           <Image
             source={require('../assets/images/head.png')}

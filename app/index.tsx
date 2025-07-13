@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, Easing, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from '../components/Text';
 
 const { width, height } = Dimensions.get('window');
 const NAME_WIDTH = 300;

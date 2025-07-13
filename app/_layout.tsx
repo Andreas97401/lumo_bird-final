@@ -9,7 +9,6 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     Righteous: require('../assets/fonts/Righteous-Regular.ttf'),
   });
 
@@ -26,6 +25,7 @@ export default function RootLayout() {
         <Stack.Screen name="HomeScreen" options={{ headerShown: false }} />
         <Stack.Screen name="CommunityPage" options={{ headerShown: false }} />
         <Stack.Screen name="StatsPage" options={{ headerShown: false }} />
+        <Stack.Screen name="OnboardingScreen" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
