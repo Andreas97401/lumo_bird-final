@@ -291,6 +291,7 @@ const styles = StyleSheet.create({
     color: '#C6E7E2',
     fontSize: 16,
     marginTop: 16,
+    fontFamily: 'Righteous',
   },
   content: {
     flex: 1,
@@ -312,16 +313,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#C6E7E2',
     marginBottom: 4,
+    fontFamily: 'Righteous',
   },
   subtitleText: {
     fontSize: 14,
     color: 'rgba(198, 231, 226, 0.7)',
     marginBottom: 4,
+    fontFamily: 'Righteous',
   },
   userInfo: {
     fontSize: 12,
     color: 'rgba(198, 231, 226, 0.5)',
     fontStyle: 'italic',
+    fontFamily: 'Righteous',
   },
   logoutButton: {
     paddingHorizontal: 16,
@@ -335,6 +339,7 @@ const styles = StyleSheet.create({
     color: '#FD8B5A',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Righteous',
   },
   scrollView: {
     flex: 1,
@@ -349,6 +354,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#C6E7E2',
     marginBottom: 15,
+    fontFamily: 'Righteous',
   },
   profileCard: {
     backgroundColor: 'rgba(198, 231, 226, 0.1)',
@@ -378,6 +384,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
+    fontFamily: 'Righteous',
   },
   profileDetails: {
     flex: 1,
@@ -387,16 +394,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#C6E7E2',
     marginBottom: 4,
+    fontFamily: 'Righteous',
   },
   profileEmail: {
     fontSize: 14,
     color: 'rgba(198, 231, 226, 0.7)',
     marginBottom: 2,
+    fontFamily: 'Righteous',
   },
   editText: {
     color: '#FD8B5A',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Righteous',
   },
   actionsGrid: {
     flexDirection: 'row',
@@ -429,10 +439,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#C6E7E2',
     marginBottom: 4,
+    fontFamily: 'Righteous',
   },
   actionSubtitle: {
     fontSize: 12,
     color: 'rgba(198, 231, 226, 0.6)',
+    fontFamily: 'Righteous',
   },
   activityCard: {
     backgroundColor: 'rgba(198, 231, 226, 0.1)',
@@ -460,9 +472,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#C6E7E2',
     marginBottom: 2,
+    fontFamily: 'Righteous',
   },
   activitySubtitle: {
     fontSize: 12,
     color: 'rgba(198, 231, 226, 0.5)',
+    fontFamily: 'Righteous',
   },
 }); 
