@@ -1,472 +1,493 @@
-import BottomNavBar from '@/components/BottomNavBar';
-import { Feather, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import BottomNavBar from '../components/BottomNavBar';
 
-const { width } = Dimensions.get('window');
-
-const ORANGE = '#FD8B5A';
-const GREENBLUE = '#71ABA4';
-const DARK = '#041836';
-const DARKER = '#11223A';
-const DARKEST = '#223A4D';
-
+// Constantes pour les données
 const MAIN_GOAL = {
-  title: 'Atteindre 66 kg',
-  current: 70,
-  target: 66,
-  progress: 0.72, // 72%
-  estimatedDate: '15/08/2024',
-  motivation: 'Tu es sur la bonne voie, continue comme ça !',
+  title: 'Atteindre 1000 points',
+  current: 750,
+  total: 1000,
+  progress: 75,
 };
 
 const LEVELS = [
-  { name: 'Novice', unlocked: true, date: '01/05/2024', desc: 'Bravo, tu as franchi le cap du débutant !' },
-  { name: 'Intermédiaire', unlocked: true, date: '15/05/2024', desc: 'Tu progresses vite, continue !' },
-  { name: 'Avancé', unlocked: false, date: null, desc: 'Encore un effort pour atteindre ce niveau.' },
-  { name: 'Expert', unlocked: false, date: null, desc: 'Le sommet est proche, persévère !' },
+  { level: 1, name: 'Débutant', points: 0, unlocked: true },
+  { level: 2, name: 'Intermédiaire', points: 200, unlocked: true },
+  { level: 3, name: 'Avancé', points: 500, unlocked: true },
+  { level: 4, name: 'Expert', points: 1000, unlocked: false },
+  { level: 5, name: 'Maître', points: 2000, unlocked: false },
 ];
 
 const BADGES = [
-  { icon: 'award', color: ORANGE, title: '50 quêtes', unlocked: true, desc: 'Avoir complété 50 quêtes.' },
-  { icon: 'star', color: ORANGE, title: '10 niveaux', unlocked: true, desc: 'Atteindre 10 niveaux.' },
-  { icon: 'calendar', color: GREENBLUE, title: '3 jours d’affilée', unlocked: false, desc: 'Être actif 3 jours de suite.' },
-  { icon: 'zap', color: '#7B61FF', title: 'Super motivation', unlocked: false, desc: 'Se connecter 7 jours d’affilée.' },
+  { id: 1, name: 'Premier Pas', description: 'Première connexion', unlocked: true, icon: '🌟' },
+  { id: 2, name: 'Discuteur', description: '10 messages envoyés', unlocked: true, icon: '💬' },
+  { id: 3, name: 'Explorateur', description: 'Visité 5 pages', unlocked: true, icon: '🗺️' },
+  { id: 4, name: 'Social', description: 'Ajouté 3 amis', unlocked: false, icon: '👥' },
+  { id: 5, name: 'Expert', description: 'Niveau 5 atteint', unlocked: false, icon: '🏆' },
+  { id: 6, name: 'Légende', description: '1000 points', unlocked: false, icon: '👑' },
 ];
 
 const KEY_STATS = [
-  { icon: 'calendar-check', color: ORANGE, label: 'Jours actifs', value: 24 },
-  { icon: 'fire', color: '#FFD700', label: 'Meilleure série', value: '7j' },
-  { icon: 'trending-up', color: GREENBLUE, label: 'Progression hebdo', value: '+1.2kg' },
+  { label: 'Points totaux', value: '750', unit: 'pts' },
+  { label: 'Niveau actuel', value: '3', unit: '' },
+  { label: 'Badges débloqués', value: '3', unit: '/6' },
+  { label: 'Messages envoyés', value: '15', unit: '' },
 ];
 
 const TIP_OF_THE_DAY = {
-  text: 'Bois un verre d’eau avant chaque repas pour booster ta motivation et ton métabolisme.',
+  title: 'Conseil du jour',
+  content: 'Participez à la communauté pour gagner plus de points et débloquer de nouveaux badges !',
 };
 
 export default function StatsPage() {
-  const [activeTab, setActiveTab] = useState('stats');
-  const [badgeModal, setBadgeModal] = useState<{visible: boolean, badge?: any}>({visible: false});
+  const [badgeModalVisible, setBadgeModalVisible] = useState(false);
+  const [selectedBadge, setSelectedBadge] = useState<any>(null);
+  const [selectedTab, setSelectedTab] = useState(0); // 0 = Stats
+  const router = useRouter();
 
-  const handleTabPress = (tab: string) => {
-    setActiveTab(tab);
-    switch (tab) {
-      case 'community':
-        window.location.href = '/CommunityPage';
-        break;
-      case 'home':
-        window.location.href = '/HomePage';
-        break;
-      case 'stats':
-        break;
+  const unlockedBadges = BADGES.filter(badge => badge.unlocked);
+  const badgePercentage = Math.round((unlockedBadges.length / BADGES.length) * 100);
+
+  const handleBadgePress = (badge: any) => {
+    setSelectedBadge(badge);
+    setBadgeModalVisible(true);
+  };
+
+  const handleHistoryPress = () => {
+    // Fonctionnalité à venir
+    console.log('Historique détaillé à venir');
+  };
+
+  const handleTabSelect = (idx: number) => {
+    setSelectedTab(idx);
+    if (idx === 0) {
+      router.push('/StatsPage');
+    } else if (idx === 1) {
+      router.push('/HomeScreen');
+    } else if (idx === 2) {
+      router.push('/CommunityPage');
     }
   };
 
-  const unlockedBadges = BADGES.filter(b => b.unlocked).length;
-  const badgePercent = Math.round((unlockedBadges / BADGES.length) * 100);
-
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Objectif principal enrichi */}
-        <Text style={styles.sectionTitle}>Objectif principal</Text>
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeaderRow}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#041836" />
+      
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Titre principal */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Mes Statistiques</Text>
+          <Text style={styles.subtitle}>Suivez vos progrès et vos accomplissements</Text>
+        </View>
+
+        {/* Objectif principal */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Objectif Principal</Text>
+          <View style={styles.goalCard}>
             <Text style={styles.goalTitle}>{MAIN_GOAL.title}</Text>
-            <MaterialCommunityIcons name="target" size={22} color={ORANGE} style={{marginLeft: 8}} />
-          </View>
-          <Text style={styles.goalSub}>{MAIN_GOAL.current} kg → <Text style={{color:ORANGE, fontWeight:'bold'}}>{MAIN_GOAL.target} kg</Text></Text>
-          <View style={styles.progressBarContainer}>
-            <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: `${MAIN_GOAL.progress * 100}%` }]} />
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${MAIN_GOAL.progress}%` }]} />
+              </View>
+              <Text style={styles.progressText}>
+                {MAIN_GOAL.current} / {MAIN_GOAL.total} points
+              </Text>
             </View>
-            <Text style={styles.progressPercent}>{Math.round(MAIN_GOAL.progress * 100)}%</Text>
           </View>
-          <Text style={styles.goalEstimation}>Estimation : <Text style={{color:GREENBLUE}}>{MAIN_GOAL.estimatedDate}</Text></Text>
-          <Text style={styles.goalMotivation}>{MAIN_GOAL.motivation}</Text>
         </View>
 
         {/* Statistiques clés */}
-        <View style={styles.keyStatsRow}>
-          {KEY_STATS.map(stat => (
-            <View key={stat.label} style={styles.keyStatCard}>
-              <Feather name={stat.icon as any} size={22} color={stat.color} style={{marginBottom: 4}} />
-              <Text style={[styles.keyStatValue, stat.color === ORANGE && {color: ORANGE}]}>{stat.value}</Text>
-              <Text style={styles.keyStatLabel}>{stat.label}</Text>
-            </View>
-          ))}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Statistiques Clés</Text>
+          <View style={styles.statsGrid}>
+            {KEY_STATS.map((stat, index) => (
+              <View key={index} style={styles.statCard}>
+                <Text style={styles.statValue}>{stat.value}</Text>
+                <Text style={styles.statUnit}>{stat.unit}</Text>
+                <Text style={styles.statLabel}>{stat.label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
-        {/* Conseil du jour */}
-        <View style={styles.tipCard}>
-          <Feather name="info" size={18} color={GREENBLUE} style={{marginRight: 8}} />
-          <Text style={styles.tipText}>{TIP_OF_THE_DAY.text}</Text>
-        </View>
-
-        {/* Niveaux atteints - timeline */}
-        <Text style={styles.sectionTitle}>Niveaux</Text>
-        <View style={styles.levelsTimeline}>
-          {LEVELS.map((level, idx) => (
-            <View key={level.name} style={styles.levelTimelineItem}>
-              <View style={[styles.levelCircle, level.unlocked ? styles.levelCircleUnlocked : styles.levelCircleLocked]}>
-                {level.unlocked ? (
-                  <FontAwesome name="star" size={18} color={ORANGE} />
-                ) : (
-                  <Feather name="lock" size={16} color={GREENBLUE} />
+        {/* Niveaux */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Progression des Niveaux</Text>
+          <View style={styles.levelsContainer}>
+            {LEVELS.map((level, index) => (
+              <View key={level.level} style={styles.levelItem}>
+                <View style={[styles.levelCircle, level.unlocked && styles.levelUnlocked]}>
+                  <Text style={[styles.levelNumber, level.unlocked && styles.levelNumberUnlocked]}>
+                    {level.level}
+                  </Text>
+                </View>
+                <View style={styles.levelInfo}>
+                  <Text style={[styles.levelName, level.unlocked && styles.levelNameUnlocked]}>
+                    {level.name}
+                  </Text>
+                  <Text style={styles.levelPoints}>{level.points} points</Text>
+                </View>
+                {index < LEVELS.length - 1 && (
+                  <View style={[styles.levelLine, level.unlocked && styles.levelLineUnlocked]} />
                 )}
               </View>
-              <View style={styles.levelTimelineContent}>
-                <Text style={[styles.levelName, level.unlocked ? {color: ORANGE} : styles.levelNameLocked]}>{level.name}</Text>
-                <Text style={styles.levelDesc}>{level.desc}</Text>
-                {level.unlocked && <Text style={styles.levelDate}>{level.date}</Text>}
-              </View>
-            </View>
-          ))}
+            ))}
+          </View>
         </View>
 
         {/* Badges */}
-        <View style={styles.badgesHeaderRow}>
-          <Text style={styles.sectionTitle}>Badges</Text>
-          <Text style={[styles.badgePercent, {color: ORANGE}]}>{badgePercent}% débloqués</Text>
+        <View style={styles.section}>
+          <View style={styles.badgesHeader}>
+            <Text style={styles.sectionTitle}>Badges</Text>
+            <Text style={styles.badgeProgress}>{badgePercentage}% débloqués</Text>
+          </View>
+          <View style={styles.badgesGrid}>
+            {BADGES.map((badge) => (
+              <TouchableOpacity
+                key={badge.id}
+                style={[styles.badgeCard, badge.unlocked && styles.badgeUnlocked]}
+                onPress={() => handleBadgePress(badge)}
+              >
+                <Text style={styles.badgeIcon}>{badge.icon}</Text>
+                <Text style={[styles.badgeName, badge.unlocked && styles.badgeNameUnlocked]}>
+                  {badge.name}
+                </Text>
+                <Text style={styles.badgeDescription}>{badge.description}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.badgesRow}>
-          {BADGES.map((badge, idx) => (
-            <Pressable
-              key={badge.title}
-              style={[styles.badgeCard, badge.unlocked ? styles.badgeOrange : styles.badgeLocked]}
-              onPress={() => setBadgeModal({visible: true, badge})}
-            >
-              <Feather
-                name={badge.icon as any}
-                size={32}
-                color={badge.unlocked ? badge.color : GREENBLUE}
-                style={{ marginBottom: 8 }}
-              />
-              <Text style={[styles.badgeTitle, badge.unlocked ? {color: ORANGE} : styles.badgeTitleLocked]}>{badge.title}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        {/* Historique bouton */}
-        <TouchableOpacity style={styles.historyBtn} onPress={() => alert('Historique détaillé à venir !')}>
-          <Feather name="bar-chart-2" size={18} color={ORANGE} style={{marginRight: 8}} />
-          <Text style={[styles.historyBtnText, {color: ORANGE}]}>Voir mon historique</Text>
-        </TouchableOpacity>
+
+        {/* Conseil du jour */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{TIP_OF_THE_DAY.title}</Text>
+          <View style={styles.tipCard}>
+            <Text style={styles.tipContent}>{TIP_OF_THE_DAY.content}</Text>
+          </View>
+        </View>
+
+        {/* Bouton Historique */}
+        <View style={styles.section}>
+          <TouchableOpacity style={styles.historyButton} onPress={handleHistoryPress}>
+            <Text style={styles.historyButtonText}>Voir l'historique détaillé</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
-      <BottomNavBar activeTab={activeTab} onTabPress={handleTabPress} />
-      {/* Modal badge */}
+
+      <BottomNavBar selectedIndex={selectedTab} onSelect={handleTabSelect} />
+
+      {/* Modal pour les détails des badges */}
       <Modal
-        visible={badgeModal.visible}
-        transparent
+        visible={badgeModalVisible}
+        transparent={true}
         animationType="fade"
-        onRequestClose={() => setBadgeModal({visible: false})}
+        onRequestClose={() => setBadgeModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Feather
-              name={badgeModal.badge?.icon as any}
-              size={40}
-              color={badgeModal.badge?.unlocked ? badgeModal.badge?.color : GREENBLUE}
-              style={{ marginBottom: 12 }}
-            />
-            <Text style={[styles.modalBadgeTitle, badgeModal.badge?.unlocked && {color: ORANGE}]}>{badgeModal.badge?.title}</Text>
-            <Text style={styles.modalBadgeDesc}>{badgeModal.badge?.desc}</Text>
-            <TouchableOpacity style={[styles.modalCloseBtn, {backgroundColor: ORANGE}]} onPress={() => setBadgeModal({visible: false})}>
-              <Text style={styles.modalCloseBtnText}>Fermer</Text>
+            {selectedBadge && (
+              <>
+                <Text style={styles.modalBadgeIcon}>{selectedBadge.icon}</Text>
+                <Text style={styles.modalBadgeName}>{selectedBadge.name}</Text>
+                <Text style={styles.modalBadgeDescription}>{selectedBadge.description}</Text>
+                <Text style={styles.modalBadgeStatus}>
+                  {selectedBadge.unlocked ? '✅ Débloqué' : '🔒 Verrouillé'}
+                </Text>
+              </>
+            )}
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setBadgeModalVisible(false)}
+            >
+              <Text style={styles.modalCloseText}>Fermer</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK,
+    backgroundColor: '#041836',
   },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 120,
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  header: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#C6E7E2',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: 'rgba(198, 231, 226, 0.7)',
+    textAlign: 'center',
+  },
+  section: {
+    marginVertical: 20,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 12,
-    marginTop: 24,
+    color: '#C6E7E2',
+    marginBottom: 15,
   },
   goalCard: {
-    backgroundColor: DARKER,
+    backgroundColor: 'rgba(198, 231, 226, 0.1)',
     borderRadius: 16,
     padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
     borderWidth: 1,
-    borderColor: DARKEST,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  goalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
+    borderColor: 'rgba(198, 231, 226, 0.2)',
   },
   goalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: ORANGE,
+    color: '#C6E7E2',
+    marginBottom: 15,
   },
-  goalSub: {
-    fontSize: 15,
-    color: '#fff',
-    marginBottom: 10,
-  },
-  progressBarContainer: {
-    flexDirection: 'row',
+  progressContainer: {
     alignItems: 'center',
+  },
+  progressBar: {
     width: '100%',
-    marginBottom: 6,
+    height: 8,
+    backgroundColor: 'rgba(198, 231, 226, 0.2)',
+    borderRadius: 4,
+    marginBottom: 8,
   },
-  progressBarBg: {
-    flex: 1,
-    height: 14,
-    backgroundColor: DARKEST,
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginRight: 12,
-  },
-  progressBarFill: {
+  progressFill: {
     height: '100%',
-    backgroundColor: ORANGE,
-    borderRadius: 8,
+    backgroundColor: '#FD8B5A',
+    borderRadius: 4,
   },
-  progressPercent: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: ORANGE,
-    minWidth: 40,
-    textAlign: 'right',
+  progressText: {
+    fontSize: 14,
+    color: 'rgba(198, 231, 226, 0.7)',
   },
-  goalEstimation: {
-    fontSize: 13,
-    color: GREENBLUE,
-    marginTop: 2,
-    marginBottom: 2,
-    fontWeight: '600',
-  },
-  goalMotivation: {
-    fontSize: 13,
-    color: '#fff',
-    marginTop: 4,
-    fontStyle: 'italic',
-    textAlign: 'center',
-  },
-  keyStatsRow: {
+  statsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 18,
-    marginTop: 8,
   },
-  keyStatCard: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: DARKER,
+  statCard: {
+    width: '48%',
+    backgroundColor: 'rgba(198, 231, 226, 0.1)',
     borderRadius: 12,
-    padding: 14,
-    marginHorizontal: 4,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: DARKEST,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    borderColor: 'rgba(198, 231, 226, 0.2)',
   },
-  keyStatValue: {
-    fontSize: 16,
+  statValue: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: GREENBLUE,
+    color: '#FD8B5A',
   },
-  keyStatLabel: {
+  statUnit: {
+    fontSize: 14,
+    color: 'rgba(198, 231, 226, 0.7)',
+    marginBottom: 4,
+  },
+  statLabel: {
     fontSize: 12,
-    color: '#fff',
+    color: 'rgba(198, 231, 226, 0.6)',
     textAlign: 'center',
   },
-  tipCard: {
+  levelsContainer: {
+    backgroundColor: 'rgba(198, 231, 226, 0.1)',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(198, 231, 226, 0.2)',
+  },
+  levelItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#193A4D',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 18,
-    borderLeftWidth: 4,
-    borderLeftColor: GREENBLUE,
-  },
-  tipText: {
-    color: '#fff',
-    fontSize: 13,
-    flex: 1,
-  },
-  levelsTimeline: {
-    marginBottom: 16,
-    marginTop: 8,
-  },
-  levelTimelineItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 18,
+    marginBottom: 20,
   },
   levelCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(198, 231, 226, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
-    borderWidth: 2,
+    marginRight: 15,
   },
-  levelCircleUnlocked: {
-    backgroundColor: '#FFF9E5',
-    borderColor: ORANGE,
+  levelUnlocked: {
+    backgroundColor: '#FD8B5A',
   },
-  levelCircleLocked: {
-    backgroundColor: DARKEST,
-    borderColor: GREENBLUE,
+  levelNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'rgba(198, 231, 226, 0.5)',
   },
-  levelTimelineContent: {
+  levelNumberUnlocked: {
+    color: '#FFFFFF',
+  },
+  levelInfo: {
     flex: 1,
   },
   levelName: {
     fontSize: 16,
-    color: '#fff',
     fontWeight: 'bold',
+    color: 'rgba(198, 231, 226, 0.5)',
   },
-  levelNameLocked: {
-    color: GREENBLUE,
-    fontWeight: '600',
-  },
-  levelDesc: {
-    fontSize: 13,
+  levelNameUnlocked: {
     color: '#C6E7E2',
-    marginBottom: 2,
   },
-  levelDate: {
+  levelPoints: {
     fontSize: 12,
-    color: GREENBLUE,
-    fontWeight: '600',
+    color: 'rgba(198, 231, 226, 0.5)',
   },
-  badgesHeaderRow: {
+  levelLine: {
+    position: 'absolute',
+    left: 20,
+    top: 40,
+    width: 2,
+    height: 20,
+    backgroundColor: 'rgba(198, 231, 226, 0.2)',
+  },
+  levelLineUnlocked: {
+    backgroundColor: '#FD8B5A',
+  },
+  badgesHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 18,
+    alignItems: 'center',
+    marginBottom: 15,
   },
-  badgePercent: {
-    fontSize: 13,
-    color: ORANGE,
-    fontWeight: 'bold',
+  badgeProgress: {
+    fontSize: 14,
+    color: 'rgba(198, 231, 226, 0.7)',
   },
-  badgesRow: {
-    marginTop: 8,
-    marginBottom: 32,
+  badgesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   badgeCard: {
-    width: 110,
-    height: 110,
-    backgroundColor: DARKER,
-    borderRadius: 16,
+    width: '48%',
+    backgroundColor: 'rgba(198, 231, 226, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
     borderWidth: 1,
-    borderColor: DARKEST,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    borderColor: 'rgba(198, 231, 226, 0.2)',
+    opacity: 0.5,
   },
-  badgeOrange: {
-    borderColor: ORANGE,
-    shadowColor: ORANGE,
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+  badgeUnlocked: {
+    opacity: 1,
+    borderColor: '#FD8B5A',
   },
-  badgeLocked: {
-    opacity: 0.4,
-    backgroundColor: DARKEST,
+  badgeIcon: {
+    fontSize: 32,
+    marginBottom: 8,
   },
-  badgeTitle: {
-    fontSize: 13,
-    color: ORANGE,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  badgeTitleLocked: {
-    color: GREENBLUE,
-    fontWeight: '400',
-  },
-  historyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginTop: 8,
-    backgroundColor: DARKER,
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: ORANGE,
-    shadowColor: ORANGE,
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  historyBtnText: {
-    color: ORANGE,
-    fontWeight: 'bold',
+  badgeName: {
     fontSize: 14,
+    fontWeight: 'bold',
+    color: 'rgba(198, 231, 226, 0.5)',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  badgeNameUnlocked: {
+    color: '#C6E7E2',
+  },
+  badgeDescription: {
+    fontSize: 10,
+    color: 'rgba(198, 231, 226, 0.5)',
+    textAlign: 'center',
+  },
+  tipCard: {
+    backgroundColor: 'rgba(198, 231, 226, 0.1)',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(198, 231, 226, 0.2)',
+  },
+  tipContent: {
+    fontSize: 16,
+    color: '#C6E7E2',
+    lineHeight: 24,
+  },
+  historyButton: {
+    backgroundColor: '#FD8B5A',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  historyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.18)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: DARKER,
-    borderRadius: 18,
-    padding: 28,
+    backgroundColor: '#041836',
+    borderRadius: 16,
+    padding: 30,
     alignItems: 'center',
-    width: width * 0.8,
-    shadowColor: ORANGE,
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    marginHorizontal: 40,
+    borderWidth: 1,
+    borderColor: 'rgba(198, 231, 226, 0.2)',
   },
-  modalBadgeTitle: {
-    fontSize: 18,
+  modalBadgeIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  modalBadgeName: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: ORANGE,
+    color: '#C6E7E2',
     marginBottom: 8,
   },
-  modalBadgeDesc: {
-    fontSize: 14,
-    color: '#fff',
+  modalBadgeDescription: {
+    fontSize: 16,
+    color: 'rgba(198, 231, 226, 0.7)',
     textAlign: 'center',
-    marginBottom: 18,
+    marginBottom: 16,
   },
-  modalCloseBtn: {
-    backgroundColor: ORANGE,
-    borderRadius: 16,
+  modalBadgeStatus: {
+    fontSize: 14,
+    color: '#FD8B5A',
+    marginBottom: 20,
+  },
+  modalCloseButton: {
+    backgroundColor: '#FD8B5A',
+    borderRadius: 8,
     paddingHorizontal: 24,
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
-  modalCloseBtnText: {
-    color: '#fff',
+  modalCloseText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: 'bold',
-    fontSize: 15,
   },
 }); 

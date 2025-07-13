@@ -1,4 +1,3 @@
-import BottomNavBar from '@/components/BottomNavBar';
 import { signOut, supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -7,7 +6,6 @@ import {
     Alert,
     Animated,
     Dimensions,
-    Image,
     SafeAreaView,
     ScrollView,
     StatusBar,
@@ -23,7 +21,6 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('home');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const router = useRouter();
@@ -125,20 +122,12 @@ export default function HomePage() {
     Alert.alert('Profil', 'Page de profil à venir !');
   };
 
-  const handleTabPress = (tab: string) => {
-    setActiveTab(tab);
-    
-    switch (tab) {
-      case 'community':
-        router.push('/CommunityPage');
-        break;
-      case 'home':
-        // Déjà sur la page d'accueil
-        break;
-      case 'stats':
-        router.push('/StatsPage');
-        break;
-    }
+  const handleNavigateToStats = () => {
+    router.push('/StatsPage');
+  };
+
+  const handleNavigateToCommunity = () => {
+    router.push('/CommunityPage');
   };
 
   // Affichage de chargement
@@ -206,17 +195,12 @@ export default function HomePage() {
                 </View>
                 <View style={styles.profileDetails}>
                   <Text style={styles.profileName}>
-                    {userProfile?.prenom || user.email?.split('@')[0] || 'Utilisateur'}
+                    {userProfile?.prenom || 'Utilisateur'}
                   </Text>
                   <Text style={styles.profileEmail}>{user.email}</Text>
-                  {userProfile && (
-                    <Text style={styles.profileDetails}>
-                      {userProfile.age} ans • {userProfile.genre}
-                    </Text>
-                  )}
                 </View>
               </View>
-              <Text style={styles.editText}>Modifier →</Text>
+              <Text style={styles.editText}>Modifier</Text>
             </TouchableOpacity>
           </View>
 
@@ -228,32 +212,32 @@ export default function HomePage() {
                 <View style={styles.actionIcon}>
                   <Text style={styles.actionIconText}>💬</Text>
                 </View>
-                <Text style={styles.actionTitle}>Nouveau Chat</Text>
-                <Text style={styles.actionSubtitle}>Démarrer une conversation</Text>
+                <Text style={styles.actionTitle}>Commencer un chat</Text>
+                <Text style={styles.actionSubtitle}>Discuter avec la communauté</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.actionCard}>
-                <View style={styles.actionIcon}>
-                  <Text style={styles.actionIconText}>🎯</Text>
-                </View>
-                <Text style={styles.actionTitle}>Mes Objectifs</Text>
-                <Text style={styles.actionSubtitle}>Suivre mes progrès</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.actionCard}>
+              <TouchableOpacity style={styles.actionCard} onPress={handleNavigateToStats}>
                 <View style={styles.actionIcon}>
                   <Text style={styles.actionIconText}>📊</Text>
                 </View>
-                <Text style={styles.actionTitle}>Statistiques</Text>
-                <Text style={styles.actionSubtitle}>Voir mes données</Text>
+                <Text style={styles.actionTitle}>Mes Statistiques</Text>
+                <Text style={styles.actionSubtitle}>Voir mes progrès</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.actionCard}>
+              <TouchableOpacity style={styles.actionCard} onPress={handleNavigateToCommunity}>
                 <View style={styles.actionIcon}>
-                  <Text style={styles.actionIconText}>⚙️</Text>
+                  <Text style={styles.actionIconText}>👥</Text>
                 </View>
-                <Text style={styles.actionTitle}>Paramètres</Text>
-                <Text style={styles.actionSubtitle}>Configurer l'app</Text>
+                <Text style={styles.actionTitle}>Communauté</Text>
+                <Text style={styles.actionSubtitle}>Rejoindre les discussions</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.actionCard} onPress={handleViewProfile}>
+                <View style={styles.actionIcon}>
+                  <Text style={styles.actionIconText}>👤</Text>
+                </View>
+                <Text style={styles.actionTitle}>Mon Profil</Text>
+                <Text style={styles.actionSubtitle}>Gérer mes informations</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -265,49 +249,29 @@ export default function HomePage() {
               <View style={styles.activityItem}>
                 <View style={styles.activityDot} />
                 <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>Connexion réussie</Text>
-                  <Text style={styles.activityTime}>Il y a quelques minutes</Text>
+                  <Text style={styles.activityTitle}>Bienvenue sur LumoBird !</Text>
+                  <Text style={styles.activitySubtitle}>Il y a quelques minutes</Text>
                 </View>
               </View>
-              {userProfile && (
-                <View style={styles.activityItem}>
-                  <View style={styles.activityDot} />
-                  <View style={styles.activityContent}>
-                    <Text style={styles.activityTitle}>Profil chargé</Text>
-                    <Text style={styles.activityTime}>Données de {userProfile.prenom} affichées</Text>
-                  </View>
+              
+              <View style={styles.activityItem}>
+                <View style={styles.activityDot} />
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityTitle}>Profil créé avec succès</Text>
+                  <Text style={styles.activitySubtitle}>Il y a quelques minutes</Text>
                 </View>
-              )}
-            </View>
-          </View>
-
-          {/* Section Découverte */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Découvrir LumoBird</Text>
-            <View style={styles.discoveryCard}>
-              <Image 
-                source={require('../assets/images/bird.png')} 
-                style={styles.discoveryImage}
-                resizeMode="contain"
-              />
-              <View style={styles.discoveryContent}>
-                <Text style={styles.discoveryTitle}>Bienvenue dans l'univers LumoBird !</Text>
-                <Text style={styles.discoveryText}>
-                  Explorez nos fonctionnalités et commencez votre aventure avec nous.
-                </Text>
-                <TouchableOpacity style={styles.discoveryButton}>
-                  <Text style={styles.discoveryButtonText}>Commencer l'exploration</Text>
-                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.activityItem}>
+                <View style={styles.activityDot} />
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityTitle}>Prêt à commencer l'aventure</Text>
+                  <Text style={styles.activitySubtitle}>Il y a quelques minutes</Text>
+                </View>
               </View>
             </View>
           </View>
         </ScrollView>
-
-        {/* Barre de navigation */}
-        <BottomNavBar 
-          activeTab={activeTab}
-          onTabPress={handleTabPress}
-        />
       </Animated.View>
     </SafeAreaView>
   );
@@ -375,7 +339,7 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingBottom: 20, // Espace pour la barre de navigation
+    paddingBottom: 20,
   },
   section: {
     marginVertical: 20,
@@ -497,50 +461,8 @@ const styles = StyleSheet.create({
     color: '#C6E7E2',
     marginBottom: 2,
   },
-  activityTime: {
+  activitySubtitle: {
     fontSize: 12,
-    color: 'rgba(198, 231, 226, 0.6)',
-  },
-  discoveryCard: {
-    backgroundColor: 'rgba(198, 231, 226, 0.1)',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(198, 231, 226, 0.2)',
-    alignItems: 'center',
-  },
-  discoveryImage: {
-    width: 80,
-    height: 80,
-    tintColor: '#C6E7E2',
-    marginBottom: 16,
-  },
-  discoveryContent: {
-    alignItems: 'center',
-  },
-  discoveryTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#C6E7E2',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  discoveryText: {
-    fontSize: 14,
-    color: 'rgba(198, 231, 226, 0.7)',
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  discoveryButton: {
-    backgroundColor: '#FD8B5A',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  discoveryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
+    color: 'rgba(198, 231, 226, 0.5)',
   },
 }); 

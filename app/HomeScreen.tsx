@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Animated, Dimensions, ImageBackground, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -82,6 +83,7 @@ export default function HomeScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const [selected, setSelected] = useState(0);
   const [selectedTab, setSelectedTab] = useState(2); // Default to center
+  const router = useRouter();
 
   const levels = Array.from({ length: LEVEL_COUNT }, (_, i) => {
     const y = CURVE_HEIGHT - INTERVAL * (i + 1);
@@ -113,6 +115,14 @@ export default function HomeScreen() {
       },
     }
   );
+
+  const handleTabSelect = (idx: number) => {
+    setSelectedTab(idx);
+    if (idx === 2) {
+      router.push('/CommunityPage');
+    }
+    // Tu peux ajouter d'autres redirections pour les autres index si besoin
+  };
 
   return (
     <>
@@ -146,7 +156,7 @@ export default function HomeScreen() {
             </View>
           </AnimatedScrollView>
         </View>
-        <BottomNavBar selectedIndex={selectedTab} onSelect={setSelectedTab} />
+        <BottomNavBar selectedIndex={selectedTab} onSelect={handleTabSelect} />
       </ImageBackground>
     </>
   );

@@ -61,7 +61,7 @@ export default function LoginScreen() {
             [
               {
                 text: 'OK',
-                onPress: () => router.push('/HomePage')
+                onPress: () => router.push('/HomeScreen')
               }
             ]
           );

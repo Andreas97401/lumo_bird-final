@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -17,6 +17,7 @@ export default function HomeScreen() {
   const chatX = useRef(new Animated.Value(-60)).current;
   const buttonFade = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+  const [selectedIndex, setSelectedIndex] = useState(1); // 1 = home tab
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -85,6 +86,21 @@ export default function HomeScreen() {
     }, 100);
     return () => clearTimeout(timeout);
   }, []);
+
+  const handleTabSelect = (index: number) => {
+    setSelectedIndex(index);
+    switch (index) {
+      case 0: // Stats
+        router.push('/StatsPage');
+        break;
+      case 1: // Home
+        // On reste sur la page d'accueil
+        break;
+      case 2: // Community
+        router.push('/CommunityPage');
+        break;
+    }
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#041836' }}>
@@ -161,6 +177,8 @@ export default function HomeScreen() {
           </>
         )}
       </View>
+      
+      {/* Bottom Navigation Bar - seulement sur HomeScreen */}
     </SafeAreaView>
   );
 }
