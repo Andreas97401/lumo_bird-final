@@ -1,9 +1,15 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, ImageBackground, Modal, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Dimensions, Easing, ImageBackground, Keyboard, Modal, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StatusBar, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+
 import Svg, { Path } from 'react-native-svg';
 
 import BottomNavBar from '../components/BottomNavBar';
+import { Text } from '../components/Text';
+import { supabase } from '../lib/supabase';
 
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
@@ -83,8 +89,13 @@ function LevelCircle({
 export default function HomeScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const [selected, setSelected] = useState(0);
+
+  
+
+  const [hasGoals, setHasGoals] = useState<boolean | null>(null);
+
   const [selectedTab, setSelectedTab] = useState(1); // Changed to 1 (center) for HomeScreen
-  const [hasGoal, setHasGoal] = useState(false); // New state for goal presence
+
   const [modalVisible, setModalVisible] = useState(false); // Modal state
   const [goalInput, setGoalInput] = useState(''); // Goal input state
   const [confirmVisible, setConfirmVisible] = useState(false); // Confirmation modal
@@ -97,7 +108,35 @@ export default function HomeScreen() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   // Add a state to store the last submitted goal
   const [lastGoal, setLastGoal] = useState('');
+
   const router = useRouter();
+
+  useEffect(() => {
+    const fetchGoals = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setHasGoals(false);
+          setLoading(false);
+          return;
+        }
+        const { data: goals, error } = await supabase
+          .from('goals')
+          .select('id')
+          .eq('user_id', user.id);
+        if (error) {
+          setHasGoals(false);
+        } else {
+          setHasGoals(goals && goals.length > 0);
+        }
+      } catch (e) {
+        setHasGoals(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGoals();
+  }, []);
 
   const levels = Array.from({ length: LEVEL_COUNT }, (_, i) => {
     const y = CURVE_HEIGHT - INTERVAL * (i + 1);
@@ -181,6 +220,16 @@ export default function HomeScreen() {
     }
   };
 
+  // Affichage conditionnel
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A1B2B', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#F48B6C" />
+      </View>
+    );
+  }
+
+  // Affichage principal avec fond et nav bar toujours visibles
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -311,19 +360,14 @@ export default function HomeScreen() {
         resizeMode="cover"
       >
         <View style={styles.content}>
-          {!hasGoal ? (
-            <View style={styles.noGoalCard}>
-              <Text style={styles.noGoalText}>Pas d&apos;objectif en cours</Text>
-              <TouchableOpacity style={styles.plusButton} onPress={() => setModalVisible(true)}>
-                <Text style={styles.plusButtonText}>+</Text>
-              </TouchableOpacity>
-              <Text style={styles.createGoalText}>Créer un objectif</Text>
-            </View>
-          ) : waitingQuestions ? (
-            <View style={styles.noGoalCard}>
-              <Text style={styles.noGoalText}>Merci ! Veuillez patienter pendant que des questions complémentaires sont générées...</Text>
-              <ActivityIndicator size="large" color={ORANGE} style={{ marginTop: 16 }} />
-            </View>
+
+          {hasGoals === false ? (
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+              <View style={{ flex: 1 }}>
+                <AnimatedQuestBox />
+              </View>
+            </TouchableWithoutFeedback>
+
           ) : (
             <AnimatedScrollView
               style={styles.scrollView}
@@ -352,6 +396,375 @@ export default function HomeScreen() {
         <BottomNavBar selectedIndex={selectedTab} onSelect={handleTabSelect} />
       </ImageBackground>
     </>
+  );
+}
+
+// --- Composant animé pour la box de quête ---
+function AnimatedQuestBox() {
+  const [step, setStep] = useState<'intro' | 'input' | 'questions'>('intro');
+  const [goalInput, setGoalInput] = useState('');
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [anim] = useState(new Animated.Value(1));
+  const [inputAnim] = useState(new Animated.Value(0));
+  const [questionsAnim] = useState(new Animated.Value(0));
+  const [loading, setLoading] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const router = useRouter();
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+
+  const handleLaunch = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Animation de disparition de la première box
+    Animated.timing(anim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setStep('input');
+      // Animation d'apparition de la deuxième box
+      Animated.timing(inputAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+
+  const handleSend = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowConfirmModal(true);
+  };
+
+  const confirmSend = async () => {
+    setShowConfirmModal(false);
+    setLoading(true);
+    // Animation de rotation
+    Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+    try {
+      // Récupérer l'utilisateur connecté
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
+      console.log('Tentative d\'insertion dans goals :', { user_id: user?.id, titre: goalInput, statut: 'nouveau' });
+      // Insérer l'objectif dans la table goals
+      if (user && user.id) {
+        const { error: insertError } = await supabase
+          .from('goals')
+          .insert({
+            user_id: user.id,
+            titre: goalInput,
+            statut: 'nouveau',
+          });
+        if (insertError) {
+          console.log('Erreur insertion goals :', insertError);
+          alert("Erreur lors de l'enregistrement de l'objectif dans la base : " + insertError.message);
+          setLoading(false);
+          rotateAnim.stopAnimation();
+          rotateAnim.setValue(0);
+          return;
+        } else {
+          console.log('Insertion goals réussie !');
+          alert('Objectif enregistré dans la base !');
+        }
+      }
+      const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook/Question_Creation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal: goalInput }),
+      });
+      const isOk = response.ok;
+      response.json().then(jsonArr => {
+        // DEBUG : afficher la réponse brute
+        console.log('Réponse n8n:', jsonArr);
+        // Pop-up de confirmation objectif
+        alert('Votre objectif est bien : ' + goalInput);
+        setTimeout(() => {
+          try {
+            const textObj = JSON.parse(jsonArr[0].text);
+            const qList = textObj.questions.map((q: any) => q.question);
+            setQuestions(qList);
+            setCurrentQuestion(0);
+            setAnswers([]);
+            setInputValue('');
+            setStep('questions');
+            Animated.timing(questionsAnim, {
+              toValue: 1,
+              duration: 350,
+              useNativeDriver: true,
+            }).start();
+          } catch (err) {
+            alert("Erreur lors de la lecture des questions.");
+          }
+        }, 1000);
+      });
+    } catch (e) {
+      setLoading(false);
+      rotateAnim.stopAnimation();
+      rotateAnim.setValue(0);
+      alert("Erreur lors de l'envoi de l'objectif.");
+    }
+  };
+
+  const cancelSend = () => {
+    setShowConfirmModal(false);
+  };
+
+  const handleNext = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const newAnswers = [...answers];
+    newAnswers[currentQuestion] = inputValue;
+    setAnswers(newAnswers);
+    setInputValue('');
+    if (currentQuestion < questions.length - 1) {
+      setCurrentQuestion(currentQuestion + 1);
+    } else {
+      alert('Merci, toutes les réponses ont été envoyées !');
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      {step === 'intro' && (
+        <Animated.View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 24,
+            padding: 32,
+            alignItems: 'center',
+            width: '85%',
+            opacity: anim,
+            transform: [{ scale: anim }],
+            position: 'absolute',
+          }}
+        >
+          <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 12 }}>
+            Tu n’as pas encore de quête…
+          </Text>
+          <Text style={{ color: '#71ABA4', fontSize: 17, textAlign: 'center', marginBottom: 28 }}>
+            Et si tu en lançais une aujourd’hui ?
+          </Text>
+          <TouchableOpacity
+            style={{
+              backgroundColor: ORANGE,
+              borderRadius: 999,
+              paddingVertical: 14,
+              width: '95%',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 8,
+              shadowColor: ORANGE,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.18,
+              shadowRadius: 8,
+              elevation: 4,
+            }}
+            activeOpacity={0.85}
+            onPress={handleLaunch}
+          >
+            <Ionicons name="rocket-outline" size={26} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>Lancer une nouvelle quête</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {step === 'input' && (
+        <>
+          <Animated.View
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: 24,
+              padding: 32,
+              alignItems: 'center',
+              width: '85%',
+              opacity: inputAnim,
+              transform: [{ scale: inputAnim }],
+              position: 'absolute',
+            }}
+          >
+            <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 18 }}>
+              Quel est ton objectif ?
+            </Text>
+            <TextInput
+              value={goalInput}
+              onChangeText={setGoalInput}
+              placeholder="Décris ton objectif..."
+              placeholderTextColor="#B0CFC7"
+              style={{
+                width: '100%',
+                borderWidth: 1.5,
+                borderColor: '#71ABA4',
+                borderRadius: 12,
+                padding: 14,
+                fontSize: 17,
+                color: '#3A5A6A',
+                marginBottom: 24,
+                backgroundColor: '#F7FAF9',
+              }}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+            <TouchableOpacity
+              style={{
+                backgroundColor: ORANGE,
+                borderRadius: 999,
+                paddingVertical: 14,
+                width: '95%',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 8,
+                shadowColor: ORANGE,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.18,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
+              activeOpacity={0.85}
+              onPress={handleSend}
+            >
+              <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold', marginRight: 8 }}>Envoyer</Text>
+              <Animated.Image
+                source={require('../assets/images/head.png')}
+                style={{
+                  width: 28,
+                  height: 28,
+                  marginLeft: 8,
+                  tintColor: '#fff',
+                  transform: [
+                    {
+                      rotate: loading
+                        ? rotateAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['0deg', '360deg'],
+                          })
+                        : '0deg',
+                    },
+                  ],
+                }}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          </Animated.View>
+          {/* Modal de confirmation custom */}
+          <Modal
+            visible={showConfirmModal}
+            transparent
+            animationType="fade"
+            onRequestClose={cancelSend}
+          >
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 28, width: '80%', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 }}>
+                <Text style={{ color: '#3A5A6A', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 18 }}>
+                  Confirmez-vous que votre objectif est :
+                </Text>
+                <Text style={{ color: '#71ABA4', fontSize: 18, textAlign: 'center', marginBottom: 28 }}>
+                  {goalInput}
+                </Text>
+                <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between' }}>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#5F9E8A', borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 }}
+                    onPress={confirmSend}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Confirmer</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#FD8B5A', borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 }}
+                    onPress={cancelSend}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Annuler</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </>
+      )}
+
+      {step === 'questions' && questions.length > 0 && (
+        <Animated.View
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: 24,
+            padding: 32,
+            alignItems: 'center',
+            width: '85%',
+            opacity: questionsAnim,
+            transform: [{ scale: questionsAnim }],
+            position: 'absolute',
+          }}
+        >
+          {/* Barre de progression */}
+          <View style={{ width: '100%', height: 6, backgroundColor: '#E6E6E6', borderRadius: 3, marginBottom: 24, overflow: 'hidden' }}>
+            <Animated.View
+              style={{
+                height: 6,
+                backgroundColor: '#71ABA4',
+                width: `${((currentQuestion + 1) / questions.length) * 100}%`,
+                borderRadius: 3,
+              }}
+            />
+          </View>
+          <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 18 }}>
+            {`Question N°${currentQuestion + 1} :`}
+          </Text>
+          <Text style={{ color: '#3A5A6A', fontSize: 18, textAlign: 'center', marginBottom: 18 }}>
+            {questions[currentQuestion]}
+          </Text>
+          <TextInput
+            value={inputValue}
+            onChangeText={setInputValue}
+            placeholder="Ta réponse..."
+            placeholderTextColor="#B0CFC7"
+            style={{
+              width: '100%',
+              borderWidth: 1.5,
+              borderColor: '#71ABA4',
+              borderRadius: 12,
+              padding: 14,
+              fontSize: 17,
+              color: '#3A5A6A',
+              marginBottom: 24,
+              backgroundColor: '#F7FAF9',
+            }}
+            multiline
+            numberOfLines={2}
+            textAlignVertical="top"
+          />
+          <TouchableOpacity
+            style={{
+              backgroundColor: ORANGE,
+              borderRadius: 999,
+              paddingVertical: 14,
+              width: '95%',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 8,
+              shadowColor: ORANGE,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.18,
+              shadowRadius: 8,
+              elevation: 4,
+            }}
+            activeOpacity={0.85}
+            onPress={handleNext}
+          >
+            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>{currentQuestion === questions.length - 1 ? 'Terminer' : 'Next'}</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+    </View>
   );
 }
 

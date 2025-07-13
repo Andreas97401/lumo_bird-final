@@ -2,19 +2,19 @@ import { signOut, supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 import BottomNavBar from '../components/BottomNavBar';
+import { Text } from '../components/Text';
 
 export default function CommunityPage() {
   const [user, setUser] = useState<any>(null);
