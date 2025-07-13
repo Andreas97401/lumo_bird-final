@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Dimensions, Easing, ImageBackground, Keyboard, Modal, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StatusBar, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Dimensions, Easing, ImageBackground, Keyboard, Modal, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StatusBar, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+
 import Svg, { Path } from 'react-native-svg';
+
 import BottomNavBar from '../components/BottomNavBar';
 import { Text } from '../components/Text';
 import { supabase } from '../lib/supabase';
@@ -86,9 +89,26 @@ function LevelCircle({
 export default function HomeScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const [selected, setSelected] = useState(0);
-  const [selectedTab, setSelectedTab] = useState(2); // Default to center
-  const [loading, setLoading] = useState(true);
+
+  
+
   const [hasGoals, setHasGoals] = useState<boolean | null>(null);
+
+  const [selectedTab, setSelectedTab] = useState(1); // Changed to 1 (center) for HomeScreen
+
+  const [modalVisible, setModalVisible] = useState(false); // Modal state
+  const [goalInput, setGoalInput] = useState(''); // Goal input state
+  const [confirmVisible, setConfirmVisible] = useState(false); // Confirmation modal
+  const [waitingQuestions, setWaitingQuestions] = useState(false); // Waiting for questions
+  const [loading, setLoading] = useState(false); // Loading state for webhook
+  // Questions modal state
+  const [questionsModalVisible, setQuestionsModalVisible] = useState(false);
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  // Add a state to store the last submitted goal
+  const [lastGoal, setLastGoal] = useState('');
+
   const router = useRouter();
 
   useEffect(() => {
@@ -151,10 +171,53 @@ export default function HomeScreen() {
 
   const handleTabSelect = (idx: number) => {
     setSelectedTab(idx);
-    if (idx === 2) {
+    // Consistent navigation logic
+    if (idx === 0) {
+      router.push('/StatsPage');
+    } else if (idx === 1) {
+      // Already on HomeScreen, no navigation needed
+      return;
+    } else if (idx === 2) {
       router.push('/CommunityPage');
     }
-    // Tu peux ajouter d'autres redirections pour les autres index si besoin
+  };
+
+  const handleGoalSubmit = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook/Question_Creation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal: goalInput }),
+      });
+      console.log('Webhook response status:', response.status);
+      const raw = await response.text();
+      console.log('Webhook raw response:', raw);
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch (e) {
+        console.log('Failed to parse JSON:', e);
+        throw e;
+      }
+      console.log('Parsed webhook data:', data);
+      // Parse the questions from the webhook response
+      const parsed = JSON.parse(data[0].text);
+      console.log('Parsed questions:', parsed);
+      setQuestions((parsed.questions as any[]).map((q: any) => q.question));
+      setAnswers(Array((parsed.questions as any[]).length).fill(''));
+      setCurrentQuestion(0);
+      setQuestionsModalVisible(true);
+      setHasGoal(true);
+      setWaitingQuestions(false);
+      setGoalInput('');
+      setLastGoal(goalInput); // Save the goal for later submission
+    } catch (e) {
+      Alert.alert('Erreur', "Impossible d'envoyer l'objectif. Veuillez réessayer.");
+    } finally {
+      setLoading(false);
+      setConfirmVisible(false);
+    }
   };
 
   // Affichage conditionnel
@@ -170,18 +233,141 @@ export default function HomeScreen() {
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Quel est ton objectif ?</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Décris ton objectif..."
+              value={goalInput}
+              onChangeText={setGoalInput}
+              autoFocus
+            />
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setConfirmVisible(true)}
+              disabled={!goalInput.trim()}
+            >
+              <Text style={styles.modalButtonText}>Valider</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalCancelText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      {/* Confirmation Modal */}
+      <Modal
+        visible={confirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Confirmer l&apos;objectif</Text>
+            <Text style={{ fontSize: 16, color: '#3A5A6A', marginBottom: 16, textAlign: 'center' }}>{goalInput}</Text>
+            {loading ? (
+              <ActivityIndicator size="large" color={ORANGE} />
+            ) : (
+              <>
+                <TouchableOpacity style={styles.modalButton} onPress={handleGoalSubmit}>
+                  <Text style={styles.modalButtonText}>Envoyer</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setConfirmVisible(false)}>
+                  <Text style={styles.modalCancelText}>Annuler</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+      {/* Questions Modal */}
+      <Modal
+        visible={questionsModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setQuestionsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              Question {currentQuestion + 1} / {questions.length}
+            </Text>
+            <Text style={styles.questionText}>{questions[currentQuestion]}</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Votre réponse..."
+              value={answers[currentQuestion]}
+              onChangeText={text => {
+                const newAnswers = [...answers];
+                newAnswers[currentQuestion] = text;
+                setAnswers(newAnswers);
+              }}
+            />
+            <View style={{ flexDirection: 'row', marginTop: 16 }}>
+              <TouchableOpacity
+                style={[styles.modalButton, { opacity: currentQuestion === 0 ? 0.5 : 1 }]}
+                disabled={currentQuestion === 0}
+                onPress={() => setCurrentQuestion(currentQuestion - 1)}
+              >
+                <Text style={styles.modalButtonText}>Précédent</Text>
+              </TouchableOpacity>
+              <View style={{ width: 16 }} />
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={() => {
+                  if (currentQuestion < questions.length - 1) {
+                    setCurrentQuestion(currentQuestion + 1);
+                  } else {
+                    setQuestionsModalVisible(false);
+                    // Send answers and goal to Level_Creation webhook
+                    fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/Level_Creation', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        goal: lastGoal,
+                        responses: Object.fromEntries(questions.map((q, i) => [q, answers[i]])),
+                      }),
+                    })
+                      .then(res => res.text())
+                      .then(resText => {
+                        console.log('Level_Creation webhook response:', resText);
+                      })
+                      .catch(err => {
+                        console.log('Level_Creation webhook error:', err);
+                      });
+                  }
+                }}
+              >
+                <Text style={styles.modalButtonText}>
+                  {currentQuestion < questions.length - 1 ? 'Suivant' : 'Terminer'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <ImageBackground
         source={require('../assets/images/Untitled.png')}
         style={styles.container}
         resizeMode="cover"
       >
         <View style={styles.content}>
+
           {hasGoals === false ? (
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
               <View style={{ flex: 1 }}>
                 <AnimatedQuestBox />
               </View>
             </TouchableWithoutFeedback>
+
           ) : (
             <AnimatedScrollView
               style={styles.scrollView}
@@ -658,5 +844,110 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: '#fff',
     opacity: 0.9,
+  },
+  noGoalCard: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    padding: 20,
+    borderRadius: 10,
+    margin: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  noGoalText: {
+    fontSize: 20,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  plusButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: ORANGE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  plusButtonText: {
+    fontSize: 36,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  createGoalText: {
+    fontSize: 18,
+    color: ORANGE,
+    textDecorationLine: 'underline',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCard: {
+    width: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#3A5A6A',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E6E6E6',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 18,
+    backgroundColor: '#F7F7F7',
+    color: '#333',
+  },
+  modalButton: {
+    backgroundColor: ORANGE,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    marginBottom: 8,
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalCancelText: {
+    color: '#888',
+    fontSize: 16,
+    marginTop: 4,
+    textDecorationLine: 'underline',
+  },
+  questionText: {
+    fontSize: 18,
+    color: '#3A5A6A',
+    marginBottom: 16,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });

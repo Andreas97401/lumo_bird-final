@@ -70,8 +70,10 @@ export default function StatsPage() {
 
   const handleTabSelect = (idx: number) => {
     setSelectedTab(idx);
+    // Consistent navigation logic
     if (idx === 0) {
-      router.push('/StatsPage');
+      // Already on StatsPage, no navigation needed
+      return;
     } else if (idx === 1) {
       router.push('/HomeScreen');
     } else if (idx === 2) {
@@ -217,6 +219,7 @@ export default function StatsPage() {
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
