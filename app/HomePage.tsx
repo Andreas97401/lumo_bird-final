@@ -1,4 +1,3 @@
-import BottomNavBar from '@/components/BottomNavBar';
 import { signOut, supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -23,7 +22,6 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('home');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const router = useRouter();
@@ -123,22 +121,6 @@ export default function HomePage() {
 
   const handleViewProfile = () => {
     Alert.alert('Profil', 'Page de profil à venir !');
-  };
-
-  const handleTabPress = (tab: string) => {
-    setActiveTab(tab);
-    
-    switch (tab) {
-      case 'community':
-        router.push('/CommunityPage');
-        break;
-      case 'home':
-        // Déjà sur la page d'accueil
-        break;
-      case 'stats':
-        router.push('/StatsPage');
-        break;
-    }
   };
 
   // Affichage de chargement
@@ -302,12 +284,6 @@ export default function HomePage() {
             </View>
           </View>
         </ScrollView>
-
-        {/* Barre de navigation */}
-        <BottomNavBar 
-          activeTab={activeTab}
-          onTabPress={handleTabPress}
-        />
       </Animated.View>
     </SafeAreaView>
   );
@@ -375,7 +351,6 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingBottom: 20, // Espace pour la barre de navigation
   },
   section: {
     marginVertical: 20,
