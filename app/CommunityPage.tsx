@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+
 import BottomNavBar from '../components/BottomNavBar';
 
 export default function CommunityPage() {
@@ -127,12 +128,14 @@ export default function CommunityPage() {
 
   const handleTabSelect = (idx: number) => {
     setSelectedTab(idx);
+    // Consistent navigation logic
     if (idx === 0) {
       router.push('/StatsPage');
     } else if (idx === 1) {
       router.push('/HomeScreen');
     } else if (idx === 2) {
-      router.push('/CommunityPage');
+      // Already on CommunityPage, no navigation needed
+      return;
     }
   };
 
