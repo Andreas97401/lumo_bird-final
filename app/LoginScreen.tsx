@@ -1,6 +1,7 @@
+import { signIn, supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Dimensions, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -12,6 +13,7 @@ export const options = {
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
   const router = useRouter();
@@ -31,6 +33,56 @@ export default function LoginScreen() {
     ]).start();
   }, []);
 
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await signIn(email, password);
+      
+      if (result.success) {
+        // Récupérer le profil utilisateur pour afficher le nom
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('user_profiles')
+            .select('prenom')
+            .eq('id', user.id)
+            .single();
+          
+          const userName = profile?.prenom || email.split('@')[0];
+          
+          Alert.alert(
+            'Connexion réussie !', 
+            `Bienvenue ${userName} ! Vous allez être redirigé vers votre espace personnel.`,
+            [
+              {
+                text: 'OK',
+                onPress: () => router.push('/HomePage')
+              }
+            ]
+          );
+        } else {
+          router.push('/HomePage');
+        }
+      } else {
+        Alert.alert('Erreur', `Erreur de connexion: ${result.error}`);
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Une erreur est survenue lors de la connexion');
+      console.error('Erreur handleLogin:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignup = () => {
+    router.push('/Signup');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -43,6 +95,9 @@ export default function LoginScreen() {
             { opacity: fadeAnim, transform: [{ translateY }] }
           ]}>
             <Text style={styles.title}>Connexion</Text>
+            <Text style={styles.subtitle}>
+              Connectez-vous avec vos identifiants
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="Email"
@@ -60,12 +115,23 @@ export default function LoginScreen() {
               onChangeText={setPassword}
               secureTextEntry
             />
-            <TouchableOpacity style={styles.button} onPress={() => router.push('/HomeScreen')}>
-              <Text style={styles.buttonText}>Se connecter</Text>
+            <TouchableOpacity 
+              style={[styles.button, isLoading && styles.buttonDisabled]}
+              onPress={handleLogin}
+              disabled={isLoading}
+            >
+              <Text style={styles.buttonText}>
+                {isLoading ? 'Connexion...' : 'Se connecter'}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.switchButton}>
+            <TouchableOpacity style={styles.switchButton} onPress={handleSignup}>
               <Text style={styles.switchButtonText}>Pas encore de compte ? S'inscrire</Text>
             </TouchableOpacity>
+            <View style={styles.helpContainer}>
+              <Text style={styles.helpText}>
+                💡 Après inscription, vérifiez votre email et cliquez sur le lien de confirmation avant de vous connecter.
+              </Text>
+            </View>
           </Animated.View>
           <Image
             source={require('../assets/images/head.png')}
@@ -97,13 +163,20 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 42,
     color: '#C6E7E2',
-    marginBottom: 30,
+    marginBottom: 10,
     textAlign: 'center',
     letterSpacing: 1,
     fontWeight: 'bold',
     textShadowColor: 'rgba(198, 231, 226, 0.3)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: 'rgba(198, 231, 226, 0.7)',
+    marginBottom: 30,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   input: {
     backgroundColor: 'rgba(198, 231, 226, 0.1)',
@@ -152,5 +225,19 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     tintColor: '#FFFFFF',
     opacity: 0.8,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+    backgroundColor: '#ccc',
+  },
+  helpContainer: {
+    marginTop: 20,
+    paddingHorizontal: 20,
+  },
+  helpText: {
+    fontSize: 12,
+    color: 'rgba(198, 231, 226, 0.6)',
+    textAlign: 'center',
+    lineHeight: 16,
   },
 }); 

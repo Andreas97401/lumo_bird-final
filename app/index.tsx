@@ -154,7 +154,7 @@ export default function HomeScreen() {
               <TouchableOpacity style={[styles.button, styles.loginButton]} onPress={() => router.push('/LoginScreen')}>
                 <Text style={styles.buttonText}>Se connecter</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.button, styles.signupButton]} onPress={() => router.push('/RegisterScreen')}>
+              <TouchableOpacity style={[styles.button, styles.signupButton]} onPress={() => router.push('/Signup')}>
                 <Text style={styles.buttonText}>S'inscrire</Text>
               </TouchableOpacity>
             </Animated.View>
