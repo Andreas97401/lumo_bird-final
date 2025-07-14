@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   prenom TEXT NOT NULL,
   age INTEGER NOT NULL,
   genre TEXT NOT NULL,
+  first_connection BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -42,8 +43,8 @@ CREATE POLICY "Users can insert own profile" ON user_profiles
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.user_profiles (id, email, prenom, age, genre)
-  VALUES (NEW.id, NEW.email, '', 0, '');
+  INSERT INTO public.user_profiles (id, email, prenom, age, genre, first_connection)
+  VALUES (NEW.id, NEW.email, '', 0, '', TRUE);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

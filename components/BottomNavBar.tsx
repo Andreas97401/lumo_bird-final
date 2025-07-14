@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Dimensions, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import * as Haptics from 'expo-haptics';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Dimensions, Easing, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 const { width } = Dimensions.get('window');
-const NAVBAR_WIDTH = width * 0.92;
-const NAVBAR_HEIGHT = 70;
+const NAVBAR_WIDTH = width; // Augmenté de 0.92 à 0.95
+const NAVBAR_HEIGHT = 85; // Augmenté de 70 à 85
 const ICON_COUNT = 3;
-const ICON_SIZE = 36;
+const ICON_SIZE = 36; // Taille des icônes inchangée
 const BUBBLE_SIZE = 56;
 const NAV_BG = '#FD8B5A'; // Orange
 const BUBBLE_COLOR = '#FD8B5A'; // Orange for bubble
@@ -14,7 +14,7 @@ const SHADOW_COLOR = '#000';
 
 const ICONS = [
   require('../assets/images/Chart_Line.png'),
-  require('../assets/images/Calque_2.png'),
+  require('../assets/images/head.png'), // Changé pour head.png
   require('../assets/images/Users_Group.png'),
 ];
 
@@ -55,206 +55,152 @@ export default function BottomNavBar({ selectedIndex, onSelect }: {
   selectedIndex: number;
   onSelect: (idx: number) => void;
 }) {
-  const anim = useRef(new Animated.Value(selectedIndex)).current;
-  const [cutoutCenter, setCutoutCenter] = React.useState(() => {
-    // Initialize with correct position based on selectedIndex
-    const iconSpacing = NAVBAR_WIDTH / ICON_COUNT;
-    return iconSpacing / 2 + selectedIndex * iconSpacing;
-  });
+  // Animation values - using simple timing
+  const bubbleTranslateXAnim = useRef(new Animated.Value(0)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const [internalSelectedIndex, setInternalSelectedIndex] = useState(selectedIndex);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  const [questionsModalVisible, setQuestionsModalVisible] = useState(false);
-  const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState([]);
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-
-  useEffect(() => {
-    Animated.spring(anim, {
-      toValue: selectedIndex,
-      useNativeDriver: false,
-      stiffness: 200,
-      damping: 18,
-      mass: 0.8,
-    }).start();
-  }, [selectedIndex]);
-
-  // Calculate bubble position
+  // Calculate positions
   const iconSpacing = NAVBAR_WIDTH / ICON_COUNT;
-  const bubbleLeft = anim.interpolate({
-    inputRange: [0, 1, 2],
-    outputRange: [
-      iconSpacing / 2 - BUBBLE_SIZE / 2,
-      iconSpacing + iconSpacing / 2 - BUBBLE_SIZE / 2,
-      iconSpacing * 2 + iconSpacing / 2 - BUBBLE_SIZE / 2
-    ],
-    extrapolate: 'clamp',
-  });
+  const bubbleLeft = iconSpacing / 2 + internalSelectedIndex * iconSpacing - BUBBLE_SIZE / 2;
 
-  // This is the key fix - we need this animated value for the cutout
-  const bubbleCenterX = anim.interpolate({
-    inputRange: [0, 1, 2],
-    outputRange: [
-      iconSpacing / 2,
-      iconSpacing + iconSpacing / 2,
-      iconSpacing * 2 + iconSpacing / 2
-    ],
-    extrapolate: 'clamp',
-  });
-
-  // THE FIX: Use useEffect to listen to bubbleCenterX changes
-  useEffect(() => {
-    const listenerId = bubbleCenterX.addListener(({ value }) => {
-      setCutoutCenter(value);
-    });
-
-    return () => {
-      bubbleCenterX.removeListener(listenerId);
-    };
-  }, [bubbleCenterX]);
-
-  const r = BUBBLE_SIZE / 2 + 4; // radius of semicircle cutout, slightly larger than bubble
-
-  // Bubble should be half embedded in the navbar
   const bubbleTop = NAVBAR_HEIGHT / 2 - BUBBLE_SIZE / 4;
 
-  const handleGoalSubmit = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/Question_Creation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal: goalInput }),
-      });
-      const data = await response.json();
-      // Parse the questions from the webhook response
-      const parsed = JSON.parse(data[0].text);
-      setQuestions(parsed.questions.map(q => q.question));
-      setAnswers(Array(parsed.questions.length).fill(''));
-      setCurrentQuestion(0);
-      setQuestionsModalVisible(true);
-      setHasGoal(true);
-      setWaitingQuestions(false);
-      setGoalInput('');
-    } catch (e) {
-      Alert.alert('Erreur', "Impossible d'envoyer l'objectif. Veuillez réessayer.");
-    } finally {
-      setLoading(false);
-      setConfirmVisible(false);
+  // Mémoriser les styles des icônes pour éviter les re-calculs
+  const iconStyles = useMemo(() => {
+    return ICONS.map((_, idx) => [
+      styles.iconImage,
+      idx === 1 && { tintColor: '#fff' } // Icône du milieu (head.png) en blanc
+    ]);
+  }, []);
+
+  // Initialize position on mount
+  useEffect(() => {
+    if (!isInitialized) {
+      bubbleTranslateXAnim.setValue(bubbleLeft);
+      setIsInitialized(true);
     }
+  }, []);
+
+  // Handle internal state changes - immediate response
+  const handleInternalSelect = (idx: number) => {
+    // Update internal state immediately for instant visual feedback
+    setInternalSelectedIndex(idx);
+    
+    // Call the external handler (page navigation) immediately
+    onSelect(idx);
+    Haptics.selectionAsync(); // Haptic feedback à chaque changement
   };
+
+  // Simple animation without complex calculations - only if initialized
+  useEffect(() => {
+    if (isInitialized) {
+      // Stop any existing float animation
+      floatAnim.stopAnimation();
+      floatAnim.setValue(0);
+      
+      // Animation de la bulle
+      Animated.timing(bubbleTranslateXAnim, {
+        toValue: bubbleLeft,
+        duration: 600,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.back(1.2)),
+      }).start(() => {
+        // Effet de float 1 seconde après l'arrêt
+        setTimeout(() => {
+          Animated.loop(
+            Animated.sequence([
+              Animated.timing(floatAnim, {
+                toValue: 1,
+                duration: 1000,
+                useNativeDriver: true,
+                easing: Easing.inOut(Easing.sin),
+              }),
+              Animated.timing(floatAnim, {
+                toValue: 0,
+                duration: 1000,
+                useNativeDriver: true,
+                easing: Easing.inOut(Easing.sin),
+              }),
+            ])
+          ).start();
+        }, 1000);
+      });
+    }
+  }, [internalSelectedIndex, isInitialized]);
+
+  // Sync with external selectedIndex only on initial load
+  useEffect(() => {
+    if (!isInitialized) {
+      setInternalSelectedIndex(selectedIndex);
+    }
+  }, [selectedIndex, isInitialized]);
+
+  // Mémoriser les icônes pour éviter les re-renders
+  const memoizedIcons = useMemo(() => ICONS, []);
 
   return (
     <View style={styles.container} pointerEvents="box-none">
       <View style={styles.shadow} />
-      <Svg
-        width={NAVBAR_WIDTH}
-        height={NAVBAR_HEIGHT}
-        style={styles.svgBg}
-      >
-        <Path d={getCutoutPath(cutoutCenter, r)} fill={NAV_BG} />
-      </Svg>
+      {/* Background simple sans cutout */}
+      <View style={[styles.simpleBg, { backgroundColor: NAV_BG }]} />
       <Animated.View
         style={[
           styles.bubble,
           {
-            left: bubbleLeft,
+            left: 0, // Position statique
             top: bubbleTop,
-            shadowOpacity: 0.18,
-            shadowRadius: 12,
-            elevation: 8,
+            shadowOpacity: 0.25, // Ombre plus visible
+            shadowRadius: 15, // Ombre plus large
+            shadowOffset: { width: 0, height: 4 }, // Ombre vers le bas
+            elevation: 12, // Ombre Android plus prononcée
             zIndex: 2,
-            transform: [
-              { scale: anim.interpolate({
-                  inputRange: [0, 1, 2],
-                  outputRange: [
-                    selectedIndex === 0 ? 1.1 : 0.95,
-                    selectedIndex === 1 ? 1.1 : 0.95,
-                    selectedIndex === 2 ? 1.1 : 0.95
-                  ],
-                  extrapolate: 'clamp',
-                }) },
-            ],
             backgroundColor: BUBBLE_COLOR,
+            transform: [
+              { translateX: bubbleTranslateXAnim },
+              { translateY: floatAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, -3], // Léger mouvement vers le haut
+              })}
+            ],
           },
         ]}
       >
-        <View style={[styles.bubbleInner, { backgroundColor: BUBBLE_COLOR }]}> 
+        <View style={[styles.bubbleInner, { 
+          backgroundColor: BUBBLE_COLOR,
+          shadowColor: SHADOW_COLOR,
+          shadowOpacity: 0.15, // Ombre interne
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 4,
+        }]}> 
           <Image
-            source={ICONS[selectedIndex]}
-            style={styles.bubbleIcon}
+            source={memoizedIcons[internalSelectedIndex]}
+            style={[styles.bubbleIcon, { tintColor: '#041836' }]} // Icône dans la bulle en #041836
             resizeMode="contain"
           />
         </View>
       </Animated.View>
       <View style={styles.iconRow}>
-        {ICONS.map((icon, idx) => {
-          if (idx === selectedIndex) return <View key={idx} style={styles.iconBtn} />; // Empty space for bubble
+        {memoizedIcons.map((icon, idx) => {
+          if (idx === internalSelectedIndex) return <View key={idx} style={styles.iconBtn} />; // Empty space for bubble
           return (
             <TouchableOpacity
               key={idx}
               style={styles.iconBtn}
               activeOpacity={0.7}
-              onPress={() => onSelect(idx)}
+              onPress={() => handleInternalSelect(idx)}
             >
               <Image
                 source={icon}
-                style={styles.iconImage}
+                style={iconStyles[idx]}
                 resizeMode="contain"
               />
             </TouchableOpacity>
           );
         })}
       </View>
-
-      <Modal
-        visible={questionsModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setQuestionsModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              Question {currentQuestion + 1} / {questions.length}
-            </Text>
-            <Text style={styles.questionText}>{questions[currentQuestion]}</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Votre réponse..."
-              value={answers[currentQuestion]}
-              onChangeText={text => {
-                const newAnswers = [...answers];
-                newAnswers[currentQuestion] = text;
-                setAnswers(newAnswers);
-              }}
-            />
-            <View style={{ flexDirection: 'row', marginTop: 16 }}>
-              <TouchableOpacity
-                style={[styles.modalButton, { opacity: currentQuestion === 0 ? 0.5 : 1 }]}
-                disabled={currentQuestion === 0}
-                onPress={() => setCurrentQuestion(currentQuestion - 1)}
-              >
-                <Text style={styles.modalButtonText}>Précédent</Text>
-              </TouchableOpacity>
-              <View style={{ width: 16 }} />
-              <TouchableOpacity
-                style={styles.modalButton}
-                onPress={() => {
-                  if (currentQuestion < questions.length - 1) {
-                    setCurrentQuestion(currentQuestion + 1);
-                  } else {
-                    setQuestionsModalVisible(false);
-                    // You can handle answers submission here
-                  }
-                }}
-              >
-                <Text style={styles.modalButtonText}>
-                  {currentQuestion < questions.length - 1 ? 'Suivant' : 'Terminer'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -262,7 +208,7 @@ export default function BottomNavBar({ selectedIndex, onSelect }: {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 0, // Descendu de 24 à 12
     left: (width - NAVBAR_WIDTH) / 2,
     width: NAVBAR_WIDTH,
     height: NAVBAR_HEIGHT + BUBBLE_SIZE / 2 + 16,
@@ -280,6 +226,16 @@ const styles = StyleSheet.create({
     backgroundColor: SHADOW_COLOR,
     opacity: 0.08,
     zIndex: 0,
+  },
+  simpleBg: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: NAVBAR_HEIGHT,
+    borderTopLeftRadius: NAVBAR_HEIGHT / 2,
+    borderTopRightRadius: NAVBAR_HEIGHT / 2,
+    zIndex: 1,
   },
   svgBg: {
     position: 'absolute',
@@ -335,99 +291,5 @@ const styles = StyleSheet.create({
     width: ICON_SIZE,
     height: ICON_SIZE,
     opacity: 0.85,
-  },
-  noGoalCard: {
-    margin: 32,
-    padding: 32,
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-  },
-  noGoalText: {
-    fontSize: 20,
-    color: '#3A5A6A',
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  plusButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FD8B5A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-    elevation: 2,
-  },
-  plusButtonText: {
-    fontSize: 36,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  createGoalText: {
-    fontSize: 16,
-    color: '#FD8B5A',
-    marginTop: 4,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalCard: {
-    width: '80%',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#3A5A6A',
-    marginBottom: 16,
-  },
-  questionText: {
-    fontSize: 18,
-    color: '#3A5A6A',
-    marginBottom: 16,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  modalInput: {
-    width: '100%',
-    height: 50,
-    borderColor: '#E0E0E0',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 20,
-    fontSize: 16,
-    color: '#3A5A6A',
-  },
-  modalButton: {
-    width: '45%',
-    height: 50,
-    borderRadius: 12,
-    backgroundColor: '#FD8B5A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
 });

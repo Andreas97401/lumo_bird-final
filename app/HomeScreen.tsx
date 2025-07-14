@@ -3,27 +3,13 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  Easing,
-  ImageBackground,
-  Keyboard,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
-} from 'react-native';
 
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Dimensions, Easing, ImageBackground, Keyboard, KeyboardAvoidingView, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, ScrollView, StatusBar, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+
+
+
+import { useTranslation } from 'react-i18next';
 import Svg, { Path } from 'react-native-svg';
 
 import BottomNavBar from '../components/BottomNavBar';
@@ -39,9 +25,65 @@ const { width, height } = Dimensions.get('window');
 const statusBarHeight = StatusBar.currentHeight || 0;
 const ORANGE = '#FD8B5A';
 
-/* -------------------------------------------------------------------------- */
-/*                                COMPOSANT                                   */
-/* -------------------------------------------------------------------------- */
+
+function getSineX(y: number) {
+  return CURVE_WIDTH / 2 + AMPLITUDE * Math.sin((y / CURVE_HEIGHT) * 2 * Math.PI * OSCILLATIONS);
+}
+
+function LevelCircle({
+  y, number, isSelected, onPress, t
+}: {
+  y: number;
+  number: number;
+  isSelected: boolean;
+  onPress: () => void;
+  t: (key: string, options?: any) => string;
+}) {
+  const x = useMemo(() => getSineX(y), [y]);
+  
+  return (
+    <Animated.View
+      style={[
+        styles.levelCircle,
+        {
+          left: x - (isSelected ? EXPANDED_RADIUS : CIRCLE_RADIUS),
+          top: y - (isSelected ? EXPANDED_RADIUS : CIRCLE_RADIUS),
+          width: isSelected ? EXPANDED_RADIUS * 2 : CIRCLE_RADIUS * 2,
+          height: isSelected ? EXPANDED_RADIUS * 2 : CIRCLE_RADIUS * 2,
+          backgroundColor: isSelected ? EXPANDED_COLOR : CIRCLE_COLOR,
+          zIndex: isSelected ? 2 : 1,
+          borderWidth: isSelected ? 2 : 0,
+          borderColor: ORANGE,
+          justifyContent: 'center',
+          alignItems: 'center',
+          position: 'absolute',
+          elevation: isSelected ? 5 : 1,
+          shadowColor: '#000',
+          shadowOpacity: isSelected ? 0.2 : 0,
+          shadowRadius: isSelected ? 8 : 0,
+        },
+      ]}
+    >
+      <TouchableOpacity style={{flex:1, justifyContent:'center', alignItems:'center'}} onPress={onPress} activeOpacity={0.8}>
+        <Text style={{
+          color: isSelected ? EXPANDED_TEXT_COLOR : '#fff',
+          fontSize: isSelected ? 24 : 18,
+          fontWeight: 'bold',
+        }}>{isSelected ? `${t('homeScreen.level_niveau')} ${number}` : `${number}`}</Text>
+        {isSelected && (
+          <View style={styles.plusCircle}>
+            <Text style={{ color: ORANGE, fontSize: 28, fontWeight: 'bold' }}>+</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+      {isSelected && (
+        <View style={styles.taskListPlaceholder}>
+          <Text style={{ color: '#888', fontSize: 16, marginTop: 8 }}>{t('homeScreen.task_list_placeholder')}</Text>
+        </View>
+      )}
+    </Animated.View>
+  );
+}
 
 export default function HomeScreen() {
   /* ------------------------------ STATES ---------------------------------- */
@@ -74,6 +116,8 @@ export default function HomeScreen() {
   const currentScrollPosition = useRef<number>(0); // Track current scroll position in real time
 
   const router = useRouter();
+
+  const { t } = useTranslation();
   const scrollViewRef = useRef<any>(null);
   const savedScrollPosition = useRef<number>(0); // Save scroll position across navigation
   const isFirstLoad = useRef<boolean>(true); // Track if this is the very first load
@@ -103,6 +147,58 @@ export default function HomeScreen() {
     fetchGoalAndLevels();
   }, []);
 
+
+  // Optimisation: Mémoriser les niveaux
+  const levels = useMemo(() => 
+    Array.from({ length: LEVEL_COUNT }, (_, i) => {
+      const y = CURVE_HEIGHT - INTERVAL * (i + 1);
+      return { y, number: i + 1 };
+    }), 
+    []
+  );
+
+  // Optimisation: Mémoriser le chemin SVG
+  const path = useMemo(() => 
+    Array.from({ length: 200 }, (_, i) => {
+      const y = CURVE_HEIGHT - (i / 199) * CURVE_HEIGHT;
+      const x = getSineX(y);
+      return `${i === 0 ? 'M' : 'L'}${x},${y}`;
+    }).join(' '), 
+    []
+  );
+
+  // Optimisation: Mémoriser le gestionnaire de scroll
+  const handleScroll = useCallback(
+    Animated.event(
+      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+      {
+        useNativeDriver: false,
+        listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+          const y = e.nativeEvent.contentOffset.y;
+          let minDist = Infinity;
+          let minIdx = 0;
+          for (let i = 0; i < levels.length; i++) {
+            const dist = Math.abs((levels[i].y - y) - height / 2);
+            if (dist < minDist) {
+              minDist = dist;
+              minIdx = i;
+            }
+          }
+          setSelected(minIdx);
+        },
+      }
+    ),
+    [levels]
+  );
+
+  // Optimisation: Mémoriser le gestionnaire de sélection d'onglet
+  const handleTabSelect = useCallback((idx: number) => {
+    setSelectedTab(idx);
+    // Consistent navigation logic
+    if (idx === 0) {
+      router.push('/StatsPage');
+    } else if (idx === 1) {
+      // Already on HomeScreen, no navigation needed
   /* ---------------------- NAVIGATION STATE DETECTION ---------------------- */
   useEffect(() => {
     // This will run when the component mounts
@@ -203,8 +299,10 @@ export default function HomeScreen() {
     
     if (lvlIdx === -1) {
       console.log(`Level ${validatedLevel} not found in allLevels array`);
+
       return;
     }
+
     
     console.log(`Scrolling to level ${validatedLevel} at array index ${lvlIdx}`);
     console.log(`Level positions length: ${levelPositions.length}`);
@@ -341,6 +439,7 @@ export default function HomeScreen() {
     setSelectedLevelData(level);
     setLevelModalVisible(true);
   };
+>
 
   const handleGoalSubmit = async () => {
     setLoading(true);
@@ -374,7 +473,7 @@ export default function HomeScreen() {
       setGoalInput('');
       setLastGoal(goalInput);
     } catch (e) {
-      Alert.alert('Erreur', "Impossible d'envoyer l'objectif. Veuillez réessayer.");
+      console.log('Erreur lors de l\'envoi de l\'objectif:', e);
     } finally {
       setLoading(false);
       setConfirmVisible(false);
@@ -404,23 +503,26 @@ export default function HomeScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Quel est ton objectif ?</Text>
+            <Text style={styles.modalTitle}>{t('homeScreen.goal_modal_title')}</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Décris ton objectif..."
+              placeholder={t('homeScreen.goal_placeholder')}
               value={goalInput}
               onChangeText={setGoalInput}
               autoFocus
+              returnKeyType="done"
+              blurOnSubmit={true}
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => setConfirmVisible(true)}
               disabled={!goalInput.trim()}
             >
-              <Text style={styles.modalButtonText}>Valider</Text>
+              <Text style={styles.modalButtonText}>{t('homeScreen.validate')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setModalVisible(false)}>
-              <Text style={styles.modalCancelText}>Annuler</Text>
+              <Text style={styles.modalCancelText}>{t('homeScreen.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -435,17 +537,17 @@ export default function HomeScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Confirmer l&apos;objectif</Text>
+            <Text style={styles.modalTitle}>{t('homeScreen.confirm_goal')}</Text>
             <Text style={{ fontSize: 16, color: '#3A5A6A', marginBottom: 16, textAlign: 'center' }}>{goalInput}</Text>
             {loading ? (
               <ActivityIndicator size="large" color={ORANGE} />
             ) : (
               <>
                 <TouchableOpacity style={styles.modalButton} onPress={handleGoalSubmit}>
-                  <Text style={styles.modalButtonText}>Envoyer</Text>
+                  <Text style={styles.modalButtonText}>{t('homeScreen.send')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setConfirmVisible(false)}>
-                  <Text style={styles.modalCancelText}>Annuler</Text>
+                  <Text style={styles.modalCancelText}>{t('homeScreen.cancel')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -460,72 +562,113 @@ export default function HomeScreen() {
         animationType="slide"
         onRequestClose={() => setQuestionsModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              Question {currentQuestion + 1} / {questions.length}
+<KeyboardAvoidingView 
+  style={{ flex: 1 }} 
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+>
+  <View style={styles.modalOverlay}>
+    <View style={styles.modalCard}>
+
+      {/* Header avec flèche de retour si pas la première question */}
+      <View style={styles.modalHeader}>
+        {currentQuestion === 0 ? (
+          <View style={{ width: 40 }} />
+        ) : (
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => setCurrentQuestion(currentQuestion - 1)}
+          >
+            <Text style={styles.backButtonText}>
+              {t('homeScreen.back') || 'Précédent'}
             </Text>
-            <Text style={styles.questionText}>{questions[currentQuestion]}</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Votre réponse..."
-              value={answers[currentQuestion]}
-              onChangeText={text => {
-                const newAnswers = [...answers];
-                newAnswers[currentQuestion] = text;
-                setAnswers(newAnswers);
-              }}
-            />
-            <View style={{ flexDirection: 'row', marginTop: 16 }}>
-              <TouchableOpacity
-                style={[styles.modalButton, { opacity: currentQuestion === 0 ? 0.5 : 1 }]}
-                disabled={currentQuestion === 0}
-                onPress={() => setCurrentQuestion(currentQuestion - 1)}
-              >
-                <Text style={styles.modalButtonText}>Précédent</Text>
-              </TouchableOpacity>
-              <View style={{ width: 16 }} />
-              <TouchableOpacity
-                style={styles.modalButton}
-                onPress={async () => {
-                  if (currentQuestion < questions.length - 1) {
-                    setCurrentQuestion(currentQuestion + 1);
-                  } else {
-                    setQuestionsModalVisible(false);
-                    try {
-                      const { data: userData } = await supabase.auth.getUser();
-                      const user = userData?.user;
-                      const payload = {
-                        goal: lastGoal,
-                        responses: Object.fromEntries(questions.map((q, i) => [q, answers[i]])),
-                        user_id: user?.id || null,
-                      };
-                      
-                      await Promise.all([
-                        fetch('https://n8n.srv777212.hstgr.cloud/webhook/Level_Creation', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(payload),
-                        }),
-                        fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/Level_Creation', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(payload),
-                        }),
-                      ]);
-                    } catch (err) {
-                      console.log('Level_Creation webhook error:', err);
-                    }
-                  }
-                }}
-              >
-                <Text style={styles.modalButtonText}>
-                  {currentQuestion < questions.length - 1 ? 'Suivant' : 'Terminer'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        )}
+        <Text style={styles.modalTitle}>
+          {t('homeScreen.question_number', { current: currentQuestion + 1, total: questions.length }) ||
+            `Question ${currentQuestion + 1} / ${questions.length}`}
+        </Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      {/* Question */}
+      <Text style={styles.questionText}>{questions[currentQuestion]}</Text>
+
+      {/* Réponse */}
+      <TextInput
+        style={styles.modalInput}
+        placeholder={t('homeScreen.answer_placeholder') || 'Votre réponse...'}
+        value={answers[currentQuestion]}
+        onChangeText={text => {
+          const newAnswers = [...answers];
+          newAnswers[currentQuestion] = text;
+          setAnswers(newAnswers);
+        }}
+        multiline
+        returnKeyType="done"
+        blurOnSubmit={true}
+        onSubmitEditing={() => Keyboard.dismiss()}
+      />
+
+      {/* Boutons navigation */}
+      <View style={{ flexDirection: 'row', marginTop: 16 }}>
+        <TouchableOpacity
+          style={[styles.modalButton, { opacity: currentQuestion === 0 ? 0.5 : 1 }]}
+          disabled={currentQuestion === 0}
+          onPress={() => setCurrentQuestion(currentQuestion - 1)}
+        >
+          <Text style={styles.modalButtonText}>
+            {t('homeScreen.previous') || 'Précédent'}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={{ width: 16 }} />
+
+        <TouchableOpacity
+          style={styles.modalButton}
+          onPress={async () => {
+            if (currentQuestion < questions.length - 1) {
+              setCurrentQuestion(currentQuestion + 1);
+            } else {
+              setQuestionsModalVisible(false);
+              try {
+                const { data: userData } = await supabase.auth.getUser();
+                const user = userData?.user;
+                const payload = {
+                  goal: lastGoal,
+                  responses: Object.fromEntries(questions.map((q, i) => [q, answers[i]])),
+                  user_id: user?.id || null,
+                };
+
+                await Promise.all([
+                  fetch('https://n8n.srv777212.hstgr.cloud/webhook/Level_Creation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                  }),
+                  fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/Level_Creation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                  }),
+                ]);
+              } catch (err) {
+                console.log('Level_Creation webhook error:', err);
+              }
+            }
+          }}
+        >
+          <Text style={styles.modalButtonText}>
+            {currentQuestion < questions.length - 1
+              ? t('homeScreen.next') || 'Suivant'
+              : t('homeScreen.finish') || 'Terminer'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+    </View>
+  </View>
+</KeyboardAvoidingView>
+
       </Modal>
 
       {/* Level Details Modal - NEW CENTERED MODAL */}
@@ -616,7 +759,7 @@ export default function HomeScreen() {
             /* ----------------------- Pas de quête => QuestBox --------------- */
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View style={{ flex: 1 }}>
-                <AnimatedQuestBox />
+                <AnimatedQuestBox t={t} />
               </View>
             </TouchableWithoutFeedback>
           ) : (
@@ -766,7 +909,7 @@ export default function HomeScreen() {
 }
 
 // --- Composant animé pour la box de quête ---
-function AnimatedQuestBox() {
+function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) {
   const [step, setStep] = useState<'intro' | 'input' | 'questions'>('intro');
   const [goalInput, setGoalInput] = useState('');
   const [questions, setQuestions] = useState<string[]>([]);
@@ -814,6 +957,31 @@ function AnimatedQuestBox() {
       })
     ).start();
     try {
+
+      // Récupérer l'utilisateur connecté
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
+      console.log('Tentative d\'insertion dans goals :', { user_id: user?.id, titre: goalInput, statut: 'nouveau' });
+      // Insérer l'objectif dans la table goals
+      if (user && user.id) {
+        const { error: insertError } = await supabase
+          .from('goals')
+          .insert({
+            user_id: user.id,
+            titre: goalInput,
+            statut: 'nouveau',
+          });
+        if (insertError) {
+          console.log('Erreur insertion goals :', insertError);
+          setLoading(false);
+          rotateAnim.stopAnimation();
+          rotateAnim.setValue(0);
+          return;
+        } else {
+          console.log('Insertion goals réussie !');
+        }
+      }
+
       const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook/Question_Creation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -822,8 +990,9 @@ function AnimatedQuestBox() {
       const isOk = response.ok;
       response.json().then(jsonArr => {
         console.log('Réponse n8n:', jsonArr);
-        alert('Votre objectif est bien : ' + goalInput);
+
         setTimeout(async () => {
+
           try {
             const textObj = JSON.parse(jsonArr[0].text);
             const qList = textObj.questions.map((q: any) => q.question);
@@ -841,10 +1010,12 @@ function AnimatedQuestBox() {
               useNativeDriver: true,
             }).start();
           } catch (err) {
+
             setLoading(false);
             rotateAnim.stopAnimation();
             rotateAnim.setValue(0);
-            alert("Erreur lors de la lecture des questions.");
+           
+
           }
         }, 1000);
       });
@@ -852,7 +1023,7 @@ function AnimatedQuestBox() {
       setLoading(false);
       rotateAnim.stopAnimation();
       rotateAnim.setValue(0);
-      alert("Erreur lors de l'envoi de l'objectif.");
+      console.log("Erreur lors de l'envoi de l'objectif:", e);
     }
   };
 
@@ -869,6 +1040,7 @@ function AnimatedQuestBox() {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
     } else {
+
       try {
         const { data: userData } = await supabase.auth.getUser();
         const user = userData?.user;
@@ -892,12 +1064,13 @@ function AnimatedQuestBox() {
           }),
         ]);
         
-        alert('Merci, toutes les réponses ont été envoyées !');
+        
         // Optionally refresh the page or navigate
         window.location.reload();
       } catch (err) {
-        alert("Erreur lors de l'envoi des réponses.");
+        
       }
+
     }
   };
 
@@ -917,10 +1090,12 @@ function AnimatedQuestBox() {
           }}
         >
           <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 12 }}>
-            Tu n&apos;as pas encore de quête…
+
+            {t('homeScreen.no_quest_title')}
           </Text>
           <Text style={{ color: '#71ABA4', fontSize: 17, textAlign: 'center', marginBottom: 28 }}>
-            Et si tu en lançais une aujourd&apos;hui ?
+            {t('homeScreen.no_quest_subtitle')}
+
           </Text>
           <TouchableOpacity
             style={{
@@ -942,7 +1117,7 @@ function AnimatedQuestBox() {
             onPress={handleLaunch}
           >
             <Ionicons name="rocket-outline" size={26} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>Lancer une nouvelle quête</Text>
+            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>{t('homeScreen.launch_quest')}</Text>
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -962,12 +1137,12 @@ function AnimatedQuestBox() {
             }}
           >
             <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 18 }}>
-              Quel est ton objectif ?
+              {t('homeScreen.goal_modal_title')}
             </Text>
             <TextInput
               value={goalInput}
               onChangeText={setGoalInput}
-              placeholder="Décris ton objectif..."
+              placeholder={t('homeScreen.goal_placeholder')}
               placeholderTextColor="#B0CFC7"
               style={{
                 width: '100%',
@@ -983,6 +1158,9 @@ function AnimatedQuestBox() {
               multiline
               numberOfLines={3}
               textAlignVertical="top"
+              returnKeyType="done"
+              blurOnSubmit={true}
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             <TouchableOpacity
               style={{
@@ -1003,7 +1181,7 @@ function AnimatedQuestBox() {
               activeOpacity={0.85}
               onPress={handleSend}
             >
-              <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold', marginRight: 8 }}>Envoyer</Text>
+              <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold', marginRight: 8 }}>{t('homeScreen.send')}</Text>
               <Animated.Image
                 source={require('../assets/images/head.png')}
                 style={{
@@ -1035,7 +1213,7 @@ function AnimatedQuestBox() {
             <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center' }}>
               <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 28, width: '80%', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 }}>
                 <Text style={{ color: '#3A5A6A', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 18 }}>
-                  Confirmez-vous que votre objectif est :
+                  {t('homeScreen.confirm_goal_title')}
                 </Text>
                 <Text style={{ color: '#71ABA4', fontSize: 18, textAlign: 'center', marginBottom: 28 }}>
                   {goalInput}
@@ -1045,13 +1223,13 @@ function AnimatedQuestBox() {
                     style={{ backgroundColor: '#5F9E8A', borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 }}
                     onPress={confirmSend}
                   >
-                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Confirmer</Text>
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{t('homeScreen.confirm')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={{ backgroundColor: '#FD8B5A', borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 }}
                     onPress={cancelSend}
                   >
-                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Annuler</Text>
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{t('homeScreen.cancel')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1073,26 +1251,43 @@ function AnimatedQuestBox() {
             position: 'absolute',
           }}
         >
-          <View style={{ width: '100%', height: 6, backgroundColor: '#E6E6E6', borderRadius: 3, marginBottom: 24, overflow: 'hidden' }}>
-            <Animated.View
-              style={{
-                height: 6,
-                backgroundColor: '#71ABA4',
-                width: `${((currentQuestion + 1) / questions.length) * 100}%`,
-                borderRadius: 3,
-              }}
-            />
+
+          {/* Header compact avec flèche retour, barre de progression fine et numéro de question */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 18 }}>
+            {currentQuestion > 0 && (
+              <TouchableOpacity 
+                style={{ padding: 4, marginRight: 8 }}
+                onPress={() => setCurrentQuestion(currentQuestion - 1)}
+              >
+                <Ionicons name="arrow-back" size={24} color="#71ABA4" />
+              </TouchableOpacity>
+            )}
+            <View style={{ flex: 1, alignItems: 'center', flexDirection: 'row' }}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <View style={{ width: '100%', height: 4, backgroundColor: '#E6E6E6', borderRadius: 2, overflow: 'hidden' }}>
+                  <Animated.View
+                    style={{
+                      height: 4,
+                      backgroundColor: '#71ABA4',
+                      width: `${((currentQuestion + 1) / questions.length) * 100}%`,
+                      borderRadius: 2,
+                    }}
+                  />
+                </View>
+              </View>
+              <Text style={{ color: '#71ABA4', fontSize: 15, fontWeight: 'bold', minWidth: 48, textAlign: 'right' }}>
+                {`${currentQuestion + 1} / ${questions.length}`}
+              </Text>
+            </View>
+
           </View>
-          <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 18 }}>
-            {`Question N°${currentQuestion + 1} :`}
-          </Text>
           <Text style={{ color: '#3A5A6A', fontSize: 18, textAlign: 'center', marginBottom: 18 }}>
             {questions[currentQuestion]}
           </Text>
           <TextInput
             value={inputValue}
             onChangeText={setInputValue}
-            placeholder="Ta réponse..."
+            placeholder={t('homeScreen.answer_placeholder')}
             placeholderTextColor="#B0CFC7"
             style={{
               width: '100%',
@@ -1106,8 +1301,14 @@ function AnimatedQuestBox() {
               backgroundColor: '#F7FAF9',
             }}
             multiline
-            numberOfLines={2}
+            numberOfLines={3}
             textAlignVertical="top"
+            returnKeyType="done"
+            blurOnSubmit={true}
+            onSubmitEditing={() => {
+              Keyboard.dismiss();
+              handleNext();
+            }}
           />
           <TouchableOpacity
             style={{
@@ -1128,9 +1329,9 @@ function AnimatedQuestBox() {
             activeOpacity={0.85}
             onPress={handleNext}
           >
-            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>
-              {currentQuestion === questions.length - 1 ? 'Terminer' : 'Suivant'}
-            </Text>
+
+            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>{currentQuestion === questions.length - 1 ? t('homeScreen.finish') : t('homeScreen.next')}</Text>
+
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -1238,6 +1439,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
   },
+
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 20,
+  },
+  backButton: {
+    padding: 8,
+  },
+  backButtonText: {
+    fontSize: 24,
+    color: '#71ABA4',
+
   // New styles for the level modal
   levelModalCard: {
     width: '90%',
@@ -1354,5 +1570,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+
   },
 });

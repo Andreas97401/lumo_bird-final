@@ -1,7 +1,8 @@
 import { createUser } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { Alert, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { Text } from '../components/Text';
 
 const GENRE_OPTIONS = ['Homme', 'Femme', 'Je préfère ne pas le dire'];
@@ -32,19 +33,20 @@ export default function RegisterScreen() {
   const router = useRouter();
   // Ajout d'un état pour le modal de succès
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const { t } = useTranslation();
 
   // Validation des champs
   const validateField = (name: string, value: string) => {
     switch (name) {
       case 'prenom':
-        return value.length < 2 ? 'Le prénom doit contenir au moins 2 caractères' : '';
+        return value.length < 2 ? t('signup.firstname_min') : '';
       case 'age':
-        return isNaN(Number(value)) || value === '' ? 'L\'âge doit être un nombre' : '';
+        return isNaN(Number(value)) || value === '' ? t('signup.age_number') : '';
       case 'email':
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return !emailRegex.test(value) ? 'Email invalide' : '';
+        return !emailRegex.test(value) ? t('signup.invalid_email') : '';
       case 'password':
-        return value.length < 6 ? '6 caractères minimum' : '';
+        return value.length < 6 ? t('signup.password_min') : '';
       default:
         return '';
     }
@@ -128,10 +130,10 @@ export default function RegisterScreen() {
       if (result.success) {
         setShowSuccessModal(true);
       } else {
-        Alert.alert('Erreur', `Erreur lors de la création du compte: ${result.error}`);
+        Alert.alert(t('signup.error'), t('signup.create_error', { error: result.error }));
       }
     } catch (error) {
-      Alert.alert('Erreur', 'Une erreur est survenue lors de la création du compte.');
+      Alert.alert(t('signup.error'), t('signup.unknown_error'));
       console.error('Erreur handleSubmit:', error);
     }
   };
@@ -141,7 +143,13 @@ export default function RegisterScreen() {
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.contentWrapper}>
           {/* Titre */}
           <Animated.Text 
@@ -150,7 +158,7 @@ export default function RegisterScreen() {
               { opacity: fadeAnim, transform: [{ translateY }] }
             ]}
           >
-            Tout d'abord, présentez-vous :
+            {t('signup.intro')}
           </Animated.Text>
 
           {/* Formulaire */}
@@ -162,10 +170,10 @@ export default function RegisterScreen() {
           >
             {/* Prénom */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Prénom</Text>
+              <Text style={styles.label}>{t('signup.firstname')}</Text>
               <TextInput
                 style={[styles.input, errors.prenom ? styles.inputError : null]}
-                placeholder="Prénom"
+                placeholder={t('signup.firstname')}
                 placeholderTextColor="rgba(198, 231, 226, 0.5)"
                 onChangeText={(value) => handleChange('prenom', value)}
                 value={formData.prenom}
@@ -176,10 +184,10 @@ export default function RegisterScreen() {
             {/* Âge et Genre sur la même ligne */}
             <View style={styles.row}>
               <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}> 
-                <Text style={styles.label}>Âge</Text>
+                <Text style={styles.label}>{t('signup.age')}</Text>
                 <TextInput
                   style={[styles.input, errors.age ? styles.inputError : null]}
-                  placeholder="Âge"
+                  placeholder={t('signup.age')}
                   placeholderTextColor="rgba(198, 231, 226, 0.5)"
                   keyboardType="numeric"
                   onChangeText={(value) => handleChange('age', value)}
@@ -188,11 +196,11 @@ export default function RegisterScreen() {
                 {errors.age ? <Text style={styles.errorText}>{errors.age}</Text> : null}
               </View>
               <View style={[styles.inputGroup, { flex: 1, marginLeft: 10 }]}> 
-                <Text style={styles.label}>Genre</Text>
+                <Text style={styles.label}>{t('signup.gender')}</Text>
                 <Pressable onPress={() => setShowGenderModal(true)}>
                   <View style={styles.input}>
                     <Text style={[styles.inputText, !formData.genre && styles.placeholder]}>
-                      {formData.genre || 'Sélectionner'}
+                      {formData.genre || t('signup.select')}
                     </Text>
                   </View>
                 </Pressable>
@@ -201,7 +209,7 @@ export default function RegisterScreen() {
 
             {/* Email */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Adresse mail</Text>
+              <Text style={styles.label}>{t('signup.email')}</Text>
               <TextInput
                 style={[styles.input, errors.email ? styles.inputError : null]}
                 placeholder="Lumobird@gmail.com"
@@ -216,10 +224,10 @@ export default function RegisterScreen() {
 
             {/* Mot de passe */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Mot de passe</Text>
+              <Text style={styles.label}>{t('signup.password')}</Text>
               <TextInput
                 style={[styles.input, errors.password ? styles.inputError : null]}
-                placeholder="Mot de passe"
+                placeholder={t('signup.password')}
                 placeholderTextColor="rgba(198, 231, 226, 0.5)"
                 secureTextEntry
                 onChangeText={(value) => handleChange('password', value)}
@@ -245,7 +253,7 @@ export default function RegisterScreen() {
                 }
               ]}
             >
-              <Text style={styles.buttonText}>Suivant</Text>
+              <Text style={styles.buttonText}>{t('signup.next')}</Text>
               <Text style={[styles.buttonText, { marginLeft: -4 }]}>→</Text>
             </Animated.View>
           </Pressable>
@@ -253,7 +261,7 @@ export default function RegisterScreen() {
           {/* Lien vers la connexion */}
           <TouchableOpacity onPress={() => router.push('/LoginScreen')} style={{ alignSelf: 'center', marginTop: 18 }}>
             <Text style={{ color: '#C6E7E2', fontSize: 15, textDecorationLine: 'underline' }}>
-              Déjà un compte ? Connectez-vous
+              {t('signup.already_account')}
             </Text>
           </TouchableOpacity>
 
@@ -310,9 +318,9 @@ export default function RegisterScreen() {
             <View style={{ flex: 1, backgroundColor: 'rgba(4,24,54,0.85)', justifyContent: 'center', alignItems: 'center' }}>
               <View style={{ backgroundColor: '#0A2547', borderRadius: 20, padding: 32, alignItems: 'center', marginHorizontal: 32, borderWidth: 1, borderColor: '#71ABA4' }}>
                 <Text style={{ fontSize: 32, marginBottom: 12, color: '#71ABA4' }}>🎉</Text>
-                <Text style={{ fontSize: 22, color: '#C6E7E2', fontWeight: 'bold', marginBottom: 10, textAlign: 'center', fontFamily: 'Righteous' }}>Inscription réussie !</Text>
+                <Text style={{ fontSize: 22, color: '#C6E7E2', fontWeight: 'bold', marginBottom: 10, textAlign: 'center', fontFamily: 'Righteous' }}>{t('signup.success_title')}</Text>
                 <Text style={{ fontSize: 16, color: '#C6E7E2', textAlign: 'center', marginBottom: 24 }}>
-                  Vérifie ta boîte mail et clique sur le lien de confirmation pour activer ton compte.
+                  {t('signup.success_text')}
                 </Text>
                 <TouchableOpacity
                   style={{ backgroundColor: '#FD8B5A', borderRadius: 8, paddingHorizontal: 32, paddingVertical: 12, marginTop: 8 }}
@@ -321,12 +329,13 @@ export default function RegisterScreen() {
                     router.push('/LoginScreen');
                   }}
                 >
-                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>OK</Text>
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>{t('signup.ok')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </Modal>
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </TouchableWithoutFeedback>
   );
@@ -336,6 +345,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#041836',
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   contentWrapper: {
     flex: 1,

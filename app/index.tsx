@@ -81,9 +81,9 @@ export default function HomeScreen() {
                 });
               });
             });
-          });
-        }, 300);
-      });
+          }, 300);
+        });
+      }, 100);
     }, 100);
     return () => clearTimeout(timeout);
   }, []);
