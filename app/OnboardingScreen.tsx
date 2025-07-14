@@ -2,46 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AccessibilityInfo, Animated, Dimensions, Easing, Image, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { Text } from '../components/Text';
 import { supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
-
-const SLIDES = [
-  {
-    key: 'community',
-    image: require('../assets/images/Community.png'),
-    title: 'PROGRESSER ENSEMBLE',
-    subtitle: 'Crée des projets avec tes amis, motive-toi, partage tes victoires.',
-    animation: 'fadeInRight',
-    button: 'SUIVANT',
-    bg: ['#0A1B2B', '#7BA9A3'],
-  },
-  {
-    key: 'analytics',
-    image: require('../assets/images/Analytics.png'),
-    title: 'SUIVEZ VOS PROGRÈS',
-    subtitle: 'Des statistiques pour voir vos résultats chaque mois',
-    animation: 'fadeInUp',
-    button: 'SUIVANT',
-    bg: ['#7BA9A3', '#F48B6C'],
-  },
-  {
-    key: 'goals',
-    image: require('../assets/images/Goals.png'),
-    // Le titre sera personnalisé dynamiquement dans le render
-    title: '',
-    subtitle: 'qui va vous guider vers la réussite de tous vos objectifs',
-    animation: 'zoomIn',
-    button: 'CRÉER VOTRE PREMIER OBJECTIF',
-    bg: ['#F48B6C', '#0A1B2B'],
-  },
-];
-
-const LOGO = require('../assets/images/logo.png');
-const BIRD = require('../assets/images/Bird_speed.png');
 
 export default function OnboardingScreen() {
   const [page, setPage] = useState(0);
@@ -54,6 +21,38 @@ export default function OnboardingScreen() {
   const bgAnim = useRef(new Animated.Value(0)).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
+  const { t } = useTranslation();
+
+  // Je déplace la déclaration de SLIDES ici, après le hook
+  const SLIDES = [
+    {
+      key: 'community',
+      image: require('../assets/images/Users_Group.png'),
+      title: t('onboarding.community_title'),
+      subtitle: t('onboarding.community_subtitle'),
+      animation: 'fadeInRight',
+      button: t('onboarding.next'),
+      bg: ['#0A1B2B', '#7BA9A3'],
+    },
+    {
+      key: 'analytics',
+      image: require('../assets/images/Chart_Line.png'),
+      title: t('onboarding.analytics_title'),
+      subtitle: t('onboarding.analytics_subtitle'),
+      animation: 'fadeInUp',
+      button: t('onboarding.next'),
+      bg: ['#7BA9A3', '#F48B6C'],
+    },
+    {
+      key: 'goals',
+      image: require('../assets/images/alternate1.png'),
+      title: '', // sera personnalisé dynamiquement
+      subtitle: t('onboarding.goals_subtitle'),
+      animation: 'zoomIn',
+      button: t('onboarding.create_goal'),
+      bg: ['#F48B6C', '#0A1B2B'],
+    },
+  ];
 
   // Préchargement des images
   useEffect(() => {
@@ -217,14 +216,14 @@ export default function OnboardingScreen() {
   if (!imagesLoaded) {
     return (
       <View style={[styles.root, { backgroundColor: '#0A1B2B', justifyContent: 'center', alignItems: 'center' }]}> 
-        <Text style={{ color: '#fff', fontSize: 18 }}>Chargement…</Text>
+        <Text style={{ color: '#fff', fontSize: 18 }}>{t('onboarding.loading')}</Text>
       </View>
     );
   }
 
   return (
     <Animated.View style={[styles.root, { backgroundColor: bgColor }]}
-      accessibilityLabel="Écran d'onboarding"
+      accessibilityLabel={t('onboarding.screen_label')}
       accessibilityRole="summary"
     >
       {/* Barre de progression */}
@@ -232,7 +231,7 @@ export default function OnboardingScreen() {
         <Animated.View style={[styles.progressBar, { width: progress }]} />
         {/* Oiseau qui suit la progression */}
         <Animated.Image
-          source={BIRD}
+          source={require('../assets/images/bird.png')} // Assuming BIRD is no longer needed here
           style={[
             styles.chatIcon,
             { transform: [{ translateX: birdTranslateX }], tintColor: '#fff' },
@@ -249,7 +248,7 @@ export default function OnboardingScreen() {
         ref={pagerRef}
         onPageSelected={(e: { nativeEvent: { position: number } }) => setPage(e.nativeEvent.position)}
         accessible={true}
-        accessibilityLabel="Slides d'onboarding"
+        accessibilityLabel={t('onboarding.pager_label')}
       >
         {SLIDES.map((slide, idx) => {
           const showName = idx === 2 && userName;
@@ -272,7 +271,7 @@ export default function OnboardingScreen() {
                 />
                 <Text style={styles.title} accessibilityRole="header">
                   {idx === 2
-                    ? `BIENVENUE SUR L’APPLICATION `
+                    ? t('onboarding.welcome')
                     : slide.title}
                 </Text>
                 <Text style={styles.subtitle} accessibilityRole="text">

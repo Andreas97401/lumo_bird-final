@@ -1,6 +1,7 @@
 import { signIn, supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Alert, Animated, Dimensions, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Text } from '../components/Text';
 
@@ -18,6 +19,7 @@ export default function LoginScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
   const router = useRouter();
+  const { t } = useTranslation();
 
   useEffect(() => {
     Animated.parallel([
@@ -36,7 +38,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      Alert.alert(t('login.error'), t('login.fill_all_fields'));
       return;
     }
 
@@ -48,7 +50,7 @@ export default function LoginScreen() {
         // Récupérer l'utilisateur
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-          Alert.alert('Erreur', "Utilisateur non trouvé après connexion.");
+          Alert.alert(t('login.error'), t('login.user_not_found'));
           setIsLoading(false);
           return;
         }
@@ -59,7 +61,7 @@ export default function LoginScreen() {
           .eq('id', user.id)
           .single();
         if (profileError) {
-          Alert.alert('Erreur', "Impossible de récupérer le profil utilisateur.");
+          Alert.alert(t('login.error'), t('login.profile_not_found'));
           setIsLoading(false);
           return;
         }
@@ -69,10 +71,10 @@ export default function LoginScreen() {
           router.push('/HomeScreen');
         }
       } else {
-        Alert.alert('Erreur', `Erreur de connexion: ${result.error}`);
+        Alert.alert(t('login.error'), t('login.login_error', { error: result.error }));
       }
     } catch (error) {
-      Alert.alert('Erreur', 'Une erreur est survenue lors de la connexion');
+      Alert.alert(t('login.error'), t('login.unknown_error'));
       console.error('Erreur handleLogin:', error);
     } finally {
       setIsLoading(false);
@@ -94,13 +96,11 @@ export default function LoginScreen() {
             styles.formContainer,
             { opacity: fadeAnim, transform: [{ translateY }] }
           ]}>
-            <Text style={styles.title}>Connexion</Text>
-            <Text style={styles.subtitle}>
-              Connectez-vous avec vos identifiants
-            </Text>
+            <Text style={styles.title}>{t('login.title')}</Text>
+            <Text style={styles.subtitle}>{t('login.subtitle')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder={t('login.email')}
               placeholderTextColor="#C6E7E2"
               value={email}
               onChangeText={setEmail}
@@ -109,7 +109,7 @@ export default function LoginScreen() {
             />
             <TextInput
               style={styles.input}
-              placeholder="Mot de passe"
+              placeholder={t('login.password')}
               placeholderTextColor="#C6E7E2"
               value={password}
               onChangeText={setPassword}
@@ -121,11 +121,11 @@ export default function LoginScreen() {
               disabled={isLoading}
             >
               <Text style={styles.buttonText}>
-                {isLoading ? 'Connexion...' : 'Se connecter'}
+                {isLoading ? t('login.loading') : t('login.login_button')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.switchButton} onPress={handleSignup}>
-              <Text style={styles.switchButtonText}>Pas encore de compte ? S'inscrire</Text>
+              <Text style={styles.switchButtonText}>{t('login.no_account')}</Text>
             </TouchableOpacity>
           </Animated.View>
           <Image

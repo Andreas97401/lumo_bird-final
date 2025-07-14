@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, Easing, ImageBackground, Keyboard, Modal, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StatusBar, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Dimensions, Easing, ImageBackground, Keyboard, KeyboardAvoidingView, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, ScrollView, StatusBar, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 
+import { useTranslation } from 'react-i18next';
 import Svg, { Path } from 'react-native-svg';
 
 import BottomNavBar from '../components/BottomNavBar';
@@ -34,14 +35,16 @@ function getSineX(y: number) {
 }
 
 function LevelCircle({
-  y, number, isSelected, onPress
+  y, number, isSelected, onPress, t
 }: {
   y: number;
   number: number;
   isSelected: boolean;
   onPress: () => void;
+  t: (key: string, options?: any) => string;
 }) {
-  const x = getSineX(y);
+  const x = useMemo(() => getSineX(y), [y]);
+  
   return (
     <Animated.View
       style={[
@@ -70,7 +73,7 @@ function LevelCircle({
           color: isSelected ? EXPANDED_TEXT_COLOR : '#fff',
           fontSize: isSelected ? 24 : 18,
           fontWeight: 'bold',
-        }}>{isSelected ? `Niveau ${number}` : `${number}`}</Text>
+        }}>{isSelected ? `${t('homeScreen.level_niveau')} ${number}` : `${number}`}</Text>
         {isSelected && (
           <View style={styles.plusCircle}>
             <Text style={{ color: ORANGE, fontSize: 28, fontWeight: 'bold' }}>+</Text>
@@ -79,7 +82,7 @@ function LevelCircle({
       </TouchableOpacity>
       {isSelected && (
         <View style={styles.taskListPlaceholder}>
-          <Text style={{ color: '#888', fontSize: 16, marginTop: 8 }}>[Liste de tâches ici]</Text>
+          <Text style={{ color: '#888', fontSize: 16, marginTop: 8 }}>{t('homeScreen.task_list_placeholder')}</Text>
         </View>
       )}
     </Animated.View>
@@ -110,6 +113,7 @@ export default function HomeScreen() {
   const [lastGoal, setLastGoal] = useState('');
 
   const router = useRouter();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchGoals = async () => {
@@ -138,38 +142,51 @@ export default function HomeScreen() {
     fetchGoals();
   }, []);
 
-  const levels = Array.from({ length: LEVEL_COUNT }, (_, i) => {
-    const y = CURVE_HEIGHT - INTERVAL * (i + 1);
-    return { y, number: i + 1 };
-  });
-
-  const path = Array.from({ length: 200 }, (_, i) => {
-    const y = CURVE_HEIGHT - (i / 199) * CURVE_HEIGHT;
-    const x = getSineX(y);
-    return `${i === 0 ? 'M' : 'L'}${x},${y}`;
-  }).join(' ');
-
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: false,
-      listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-        const y = e.nativeEvent.contentOffset.y;
-        let minDist = Infinity;
-        let minIdx = 0;
-        for (let i = 0; i < levels.length; i++) {
-          const dist = Math.abs((levels[i].y - y) - height / 2);
-          if (dist < minDist) {
-            minDist = dist;
-            minIdx = i;
-          }
-        }
-        setSelected(minIdx);
-      },
-    }
+  // Optimisation: Mémoriser les niveaux
+  const levels = useMemo(() => 
+    Array.from({ length: LEVEL_COUNT }, (_, i) => {
+      const y = CURVE_HEIGHT - INTERVAL * (i + 1);
+      return { y, number: i + 1 };
+    }), 
+    []
   );
 
-  const handleTabSelect = (idx: number) => {
+  // Optimisation: Mémoriser le chemin SVG
+  const path = useMemo(() => 
+    Array.from({ length: 200 }, (_, i) => {
+      const y = CURVE_HEIGHT - (i / 199) * CURVE_HEIGHT;
+      const x = getSineX(y);
+      return `${i === 0 ? 'M' : 'L'}${x},${y}`;
+    }).join(' '), 
+    []
+  );
+
+  // Optimisation: Mémoriser le gestionnaire de scroll
+  const handleScroll = useCallback(
+    Animated.event(
+      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+      {
+        useNativeDriver: false,
+        listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+          const y = e.nativeEvent.contentOffset.y;
+          let minDist = Infinity;
+          let minIdx = 0;
+          for (let i = 0; i < levels.length; i++) {
+            const dist = Math.abs((levels[i].y - y) - height / 2);
+            if (dist < minDist) {
+              minDist = dist;
+              minIdx = i;
+            }
+          }
+          setSelected(minIdx);
+        },
+      }
+    ),
+    [levels]
+  );
+
+  // Optimisation: Mémoriser le gestionnaire de sélection d'onglet
+  const handleTabSelect = useCallback((idx: number) => {
     setSelectedTab(idx);
     // Consistent navigation logic
     if (idx === 0) {
@@ -180,7 +197,7 @@ export default function HomeScreen() {
     } else if (idx === 2) {
       router.push('/CommunityPage');
     }
-  };
+  }, [router]);
 
   const handleGoalSubmit = async () => {
     setLoading(true);
@@ -208,12 +225,12 @@ export default function HomeScreen() {
       setAnswers(Array((parsed.questions as any[]).length).fill(''));
       setCurrentQuestion(0);
       setQuestionsModalVisible(true);
-      setHasGoal(true);
+      setHasGoals(true);
       setWaitingQuestions(false);
       setGoalInput('');
       setLastGoal(goalInput); // Save the goal for later submission
     } catch (e) {
-      Alert.alert('Erreur', "Impossible d'envoyer l'objectif. Veuillez réessayer.");
+      console.log('Erreur lors de l\'envoi de l\'objectif:', e);
     } finally {
       setLoading(false);
       setConfirmVisible(false);
@@ -241,23 +258,26 @@ export default function HomeScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Quel est ton objectif ?</Text>
+            <Text style={styles.modalTitle}>{t('homeScreen.goal_modal_title')}</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Décris ton objectif..."
+              placeholder={t('homeScreen.goal_placeholder')}
               value={goalInput}
               onChangeText={setGoalInput}
               autoFocus
+              returnKeyType="done"
+              blurOnSubmit={true}
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => setConfirmVisible(true)}
               disabled={!goalInput.trim()}
             >
-              <Text style={styles.modalButtonText}>Valider</Text>
+              <Text style={styles.modalButtonText}>{t('homeScreen.validate')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setModalVisible(false)}>
-              <Text style={styles.modalCancelText}>Annuler</Text>
+              <Text style={styles.modalCancelText}>{t('homeScreen.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -271,17 +291,17 @@ export default function HomeScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Confirmer l&apos;objectif</Text>
+            <Text style={styles.modalTitle}>{t('homeScreen.confirm_goal')}</Text>
             <Text style={{ fontSize: 16, color: '#3A5A6A', marginBottom: 16, textAlign: 'center' }}>{goalInput}</Text>
             {loading ? (
               <ActivityIndicator size="large" color={ORANGE} />
             ) : (
               <>
                 <TouchableOpacity style={styles.modalButton} onPress={handleGoalSubmit}>
-                  <Text style={styles.modalButtonText}>Envoyer</Text>
+                  <Text style={styles.modalButtonText}>{t('homeScreen.send')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setConfirmVisible(false)}>
-                  <Text style={styles.modalCancelText}>Annuler</Text>
+                  <Text style={styles.modalCancelText}>{t('homeScreen.cancel')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -295,34 +315,45 @@ export default function HomeScreen() {
         animationType="slide"
         onRequestClose={() => setQuestionsModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              Question {currentQuestion + 1} / {questions.length}
-            </Text>
-            <Text style={styles.questionText}>{questions[currentQuestion]}</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Votre réponse..."
-              value={answers[currentQuestion]}
-              onChangeText={text => {
-                const newAnswers = [...answers];
-                newAnswers[currentQuestion] = text;
-                setAnswers(newAnswers);
-              }}
-            />
-            <View style={{ flexDirection: 'row', marginTop: 16 }}>
-              <TouchableOpacity
-                style={[styles.modalButton, { opacity: currentQuestion === 0 ? 0.5 : 1 }]}
-                disabled={currentQuestion === 0}
-                onPress={() => setCurrentQuestion(currentQuestion - 1)}
-              >
-                <Text style={styles.modalButtonText}>Précédent</Text>
-              </TouchableOpacity>
-              <View style={{ width: 16 }} />
-              <TouchableOpacity
-                style={styles.modalButton}
-                onPress={() => {
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              {/* Header avec flèche de retour seulement si pas la première question */}
+              <View style={styles.modalHeader}>
+                {currentQuestion === 0 ? (
+                  <View style={{ width: 40 }} />
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.backButton}
+                    onPress={() => setCurrentQuestion(currentQuestion - 1)}
+                  >
+                    <Text style={styles.backButtonText}>{t('homeScreen.back')}</Text>
+                  </TouchableOpacity>
+                )}
+                <Text style={styles.modalTitle}>
+                  {t('homeScreen.question_number', { current: currentQuestion + 1, total: questions.length })}
+                </Text>
+                <View style={{ width: 40 }} /> {/* Espace pour équilibrer */}
+              </View>
+              
+              <Text style={styles.questionText}>{questions[currentQuestion]}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder={t('homeScreen.answer_placeholder')}
+                value={answers[currentQuestion]}
+                onChangeText={text => {
+                  const newAnswers = [...answers];
+                  newAnswers[currentQuestion] = text;
+                  setAnswers(newAnswers);
+                }}
+                multiline
+                returnKeyType="done"
+                blurOnSubmit={true}
+                onSubmitEditing={() => {
+                  Keyboard.dismiss();
                   if (currentQuestion < questions.length - 1) {
                     setCurrentQuestion(currentQuestion + 1);
                   } else {
@@ -345,14 +376,50 @@ export default function HomeScreen() {
                       });
                   }
                 }}
-              >
-                <Text style={styles.modalButtonText}>
-                  {currentQuestion < questions.length - 1 ? 'Suivant' : 'Terminer'}
-                </Text>
-              </TouchableOpacity>
+              />
+              <View style={{ flexDirection: 'row', marginTop: 16 }}>
+                <TouchableOpacity
+                  style={[styles.modalButton, { opacity: currentQuestion === 0 ? 0.5 : 1 }]}
+                  disabled={currentQuestion === 0}
+                  onPress={() => setCurrentQuestion(currentQuestion - 1)}
+                >
+                  <Text style={styles.modalButtonText}>{t('homeScreen.previous')}</Text>
+                </TouchableOpacity>
+                <View style={{ width: 16 }} />
+                <TouchableOpacity
+                  style={styles.modalButton}
+                  onPress={() => {
+                    if (currentQuestion < questions.length - 1) {
+                      setCurrentQuestion(currentQuestion + 1);
+                    } else {
+                      setQuestionsModalVisible(false);
+                      // Send answers and goal to Level_Creation webhook
+                      fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/Level_Creation', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          goal: lastGoal,
+                          responses: Object.fromEntries(questions.map((q, i) => [q, answers[i]])),
+                        }),
+                      })
+                        .then(res => res.text())
+                        .then(resText => {
+                          console.log('Level_Creation webhook response:', resText);
+                        })
+                        .catch(err => {
+                          console.log('Level_Creation webhook error:', err);
+                        });
+                    }
+                  }}
+                >
+                  <Text style={styles.modalButtonText}>
+                    {currentQuestion < questions.length - 1 ? t('homeScreen.next') : t('homeScreen.finish')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
       <ImageBackground
         source={require('../assets/images/Untitled.png')}
@@ -364,7 +431,7 @@ export default function HomeScreen() {
           {hasGoals === false ? (
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
               <View style={{ flex: 1 }}>
-                <AnimatedQuestBox />
+                <AnimatedQuestBox t={t} />
               </View>
             </TouchableWithoutFeedback>
 
@@ -387,6 +454,7 @@ export default function HomeScreen() {
                     number={level.number}
                     isSelected={i === selected}
                     onPress={() => setSelected(i)}
+                    t={t}
                   />
                 ))}
               </View>
@@ -400,7 +468,7 @@ export default function HomeScreen() {
 }
 
 // --- Composant animé pour la box de quête ---
-function AnimatedQuestBox() {
+function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) {
   const [step, setStep] = useState<'intro' | 'input' | 'questions'>('intro');
   const [goalInput, setGoalInput] = useState('');
   const [questions, setQuestions] = useState<string[]>([]);
@@ -466,14 +534,12 @@ function AnimatedQuestBox() {
           });
         if (insertError) {
           console.log('Erreur insertion goals :', insertError);
-          alert("Erreur lors de l'enregistrement de l'objectif dans la base : " + insertError.message);
           setLoading(false);
           rotateAnim.stopAnimation();
           rotateAnim.setValue(0);
           return;
         } else {
           console.log('Insertion goals réussie !');
-          alert('Objectif enregistré dans la base !');
         }
       }
       const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook/Question_Creation', {
@@ -485,8 +551,6 @@ function AnimatedQuestBox() {
       response.json().then(jsonArr => {
         // DEBUG : afficher la réponse brute
         console.log('Réponse n8n:', jsonArr);
-        // Pop-up de confirmation objectif
-        alert('Votre objectif est bien : ' + goalInput);
         setTimeout(() => {
           try {
             const textObj = JSON.parse(jsonArr[0].text);
@@ -502,7 +566,7 @@ function AnimatedQuestBox() {
               useNativeDriver: true,
             }).start();
           } catch (err) {
-            alert("Erreur lors de la lecture des questions.");
+            console.log("Erreur lors de la lecture des questions:", err);
           }
         }, 1000);
       });
@@ -510,7 +574,7 @@ function AnimatedQuestBox() {
       setLoading(false);
       rotateAnim.stopAnimation();
       rotateAnim.setValue(0);
-      alert("Erreur lors de l'envoi de l'objectif.");
+      console.log("Erreur lors de l'envoi de l'objectif:", e);
     }
   };
 
@@ -527,7 +591,7 @@ function AnimatedQuestBox() {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
     } else {
-      alert('Merci, toutes les réponses ont été envoyées !');
+      console.log('Merci, toutes les réponses ont été envoyées !');
     }
   };
 
@@ -547,10 +611,10 @@ function AnimatedQuestBox() {
           }}
         >
           <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 12 }}>
-            Tu n’as pas encore de quête…
+            {t('homeScreen.no_quest_title')}
           </Text>
           <Text style={{ color: '#71ABA4', fontSize: 17, textAlign: 'center', marginBottom: 28 }}>
-            Et si tu en lançais une aujourd’hui ?
+            {t('homeScreen.no_quest_subtitle')}
           </Text>
           <TouchableOpacity
             style={{
@@ -572,7 +636,7 @@ function AnimatedQuestBox() {
             onPress={handleLaunch}
           >
             <Ionicons name="rocket-outline" size={26} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>Lancer une nouvelle quête</Text>
+            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>{t('homeScreen.launch_quest')}</Text>
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -592,12 +656,12 @@ function AnimatedQuestBox() {
             }}
           >
             <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 18 }}>
-              Quel est ton objectif ?
+              {t('homeScreen.goal_modal_title')}
             </Text>
             <TextInput
               value={goalInput}
               onChangeText={setGoalInput}
-              placeholder="Décris ton objectif..."
+              placeholder={t('homeScreen.goal_placeholder')}
               placeholderTextColor="#B0CFC7"
               style={{
                 width: '100%',
@@ -613,6 +677,9 @@ function AnimatedQuestBox() {
               multiline
               numberOfLines={3}
               textAlignVertical="top"
+              returnKeyType="done"
+              blurOnSubmit={true}
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             <TouchableOpacity
               style={{
@@ -633,7 +700,7 @@ function AnimatedQuestBox() {
               activeOpacity={0.85}
               onPress={handleSend}
             >
-              <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold', marginRight: 8 }}>Envoyer</Text>
+              <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold', marginRight: 8 }}>{t('homeScreen.send')}</Text>
               <Animated.Image
                 source={require('../assets/images/head.png')}
                 style={{
@@ -666,7 +733,7 @@ function AnimatedQuestBox() {
             <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center' }}>
               <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 28, width: '80%', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 }}>
                 <Text style={{ color: '#3A5A6A', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 18 }}>
-                  Confirmez-vous que votre objectif est :
+                  {t('homeScreen.confirm_goal_title')}
                 </Text>
                 <Text style={{ color: '#71ABA4', fontSize: 18, textAlign: 'center', marginBottom: 28 }}>
                   {goalInput}
@@ -676,13 +743,13 @@ function AnimatedQuestBox() {
                     style={{ backgroundColor: '#5F9E8A', borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 }}
                     onPress={confirmSend}
                   >
-                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Confirmer</Text>
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{t('homeScreen.confirm')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={{ backgroundColor: '#FD8B5A', borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 }}
                     onPress={cancelSend}
                   >
-                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Annuler</Text>
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{t('homeScreen.cancel')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -704,27 +771,41 @@ function AnimatedQuestBox() {
             position: 'absolute',
           }}
         >
-          {/* Barre de progression */}
-          <View style={{ width: '100%', height: 6, backgroundColor: '#E6E6E6', borderRadius: 3, marginBottom: 24, overflow: 'hidden' }}>
-            <Animated.View
-              style={{
-                height: 6,
-                backgroundColor: '#71ABA4',
-                width: `${((currentQuestion + 1) / questions.length) * 100}%`,
-                borderRadius: 3,
-              }}
-            />
+          {/* Header compact avec flèche retour, barre de progression fine et numéro de question */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 18 }}>
+            {currentQuestion > 0 && (
+              <TouchableOpacity 
+                style={{ padding: 4, marginRight: 8 }}
+                onPress={() => setCurrentQuestion(currentQuestion - 1)}
+              >
+                <Ionicons name="arrow-back" size={24} color="#71ABA4" />
+              </TouchableOpacity>
+            )}
+            <View style={{ flex: 1, alignItems: 'center', flexDirection: 'row' }}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <View style={{ width: '100%', height: 4, backgroundColor: '#E6E6E6', borderRadius: 2, overflow: 'hidden' }}>
+                  <Animated.View
+                    style={{
+                      height: 4,
+                      backgroundColor: '#71ABA4',
+                      width: `${((currentQuestion + 1) / questions.length) * 100}%`,
+                      borderRadius: 2,
+                    }}
+                  />
+                </View>
+              </View>
+              <Text style={{ color: '#71ABA4', fontSize: 15, fontWeight: 'bold', minWidth: 48, textAlign: 'right' }}>
+                {`${currentQuestion + 1} / ${questions.length}`}
+              </Text>
+            </View>
           </View>
-          <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 18 }}>
-            {`Question N°${currentQuestion + 1} :`}
-          </Text>
           <Text style={{ color: '#3A5A6A', fontSize: 18, textAlign: 'center', marginBottom: 18 }}>
             {questions[currentQuestion]}
           </Text>
           <TextInput
             value={inputValue}
             onChangeText={setInputValue}
-            placeholder="Ta réponse..."
+            placeholder={t('homeScreen.answer_placeholder')}
             placeholderTextColor="#B0CFC7"
             style={{
               width: '100%',
@@ -738,8 +819,14 @@ function AnimatedQuestBox() {
               backgroundColor: '#F7FAF9',
             }}
             multiline
-            numberOfLines={2}
+            numberOfLines={3}
             textAlignVertical="top"
+            returnKeyType="done"
+            blurOnSubmit={true}
+            onSubmitEditing={() => {
+              Keyboard.dismiss();
+              handleNext();
+            }}
           />
           <TouchableOpacity
             style={{
@@ -760,7 +847,7 @@ function AnimatedQuestBox() {
             activeOpacity={0.85}
             onPress={handleNext}
           >
-            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>{currentQuestion === questions.length - 1 ? 'Terminer' : 'Next'}</Text>
+            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>{currentQuestion === questions.length - 1 ? t('homeScreen.finish') : t('homeScreen.next')}</Text>
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -949,5 +1036,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
     fontWeight: '500',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 20,
+  },
+  backButton: {
+    padding: 8,
+  },
+  backButtonText: {
+    fontSize: 24,
+    color: '#71ABA4',
   },
 });
