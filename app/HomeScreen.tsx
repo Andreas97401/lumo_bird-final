@@ -3,18 +3,33 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
-
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Dimensions, Easing, ImageBackground, Keyboard, KeyboardAvoidingView, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, ScrollView, StatusBar, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
-
-
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  ImageBackground,
+  Keyboard,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View
+} from 'react-native';
 
 import { useTranslation } from 'react-i18next';
 import Svg, { Path } from 'react-native-svg';
 
 import BottomNavBar from '../components/BottomNavBar';
 import { Text } from '../components/Text';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase'; // Fixed: named import
 
 /* -------------------------------------------------------------------------- */
 /*                          CONSTANTES & UTILITAIRES                          */
@@ -24,73 +39,23 @@ const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 const { width, height } = Dimensions.get('window');
 const statusBarHeight = StatusBar.currentHeight || 0;
 const ORANGE = '#FD8B5A';
-
-
-function getSineX(y: number) {
-  return CURVE_WIDTH / 2 + AMPLITUDE * Math.sin((y / CURVE_HEIGHT) * 2 * Math.PI * OSCILLATIONS);
-}
-
-function LevelCircle({
-  y, number, isSelected, onPress, t
-}: {
-  y: number;
-  number: number;
-  isSelected: boolean;
-  onPress: () => void;
-  t: (key: string, options?: any) => string;
-}) {
-  const x = useMemo(() => getSineX(y), [y]);
-  
-  return (
-    <Animated.View
-      style={[
-        styles.levelCircle,
-        {
-          left: x - (isSelected ? EXPANDED_RADIUS : CIRCLE_RADIUS),
-          top: y - (isSelected ? EXPANDED_RADIUS : CIRCLE_RADIUS),
-          width: isSelected ? EXPANDED_RADIUS * 2 : CIRCLE_RADIUS * 2,
-          height: isSelected ? EXPANDED_RADIUS * 2 : CIRCLE_RADIUS * 2,
-          backgroundColor: isSelected ? EXPANDED_COLOR : CIRCLE_COLOR,
-          zIndex: isSelected ? 2 : 1,
-          borderWidth: isSelected ? 2 : 0,
-          borderColor: ORANGE,
-          justifyContent: 'center',
-          alignItems: 'center',
-          position: 'absolute',
-          elevation: isSelected ? 5 : 1,
-          shadowColor: '#000',
-          shadowOpacity: isSelected ? 0.2 : 0,
-          shadowRadius: isSelected ? 8 : 0,
-        },
-      ]}
-    >
-      <TouchableOpacity style={{flex:1, justifyContent:'center', alignItems:'center'}} onPress={onPress} activeOpacity={0.8}>
-        <Text style={{
-          color: isSelected ? EXPANDED_TEXT_COLOR : '#fff',
-          fontSize: isSelected ? 24 : 18,
-          fontWeight: 'bold',
-        }}>{isSelected ? `${t('homeScreen.level_niveau')} ${number}` : `${number}`}</Text>
-        {isSelected && (
-          <View style={styles.plusCircle}>
-            <Text style={{ color: ORANGE, fontSize: 28, fontWeight: 'bold' }}>+</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-      {isSelected && (
-        <View style={styles.taskListPlaceholder}>
-          <Text style={{ color: '#888', fontSize: 16, marginTop: 8 }}>{t('homeScreen.task_list_placeholder')}</Text>
-        </View>
-      )}
-    </Animated.View>
-  );
-}
+const CURVE_HEIGHT = height * 6;
+const CURVE_WIDTH = width;
+const AMPLITUDE = width * 0.25;
+const CIRCLE_RADIUS = 32;
+const EXPANDED_RADIUS = 70;
+const OSCILLATIONS = 6;
 
 export default function HomeScreen() {
   /* ------------------------------ STATES ---------------------------------- */
   const scrollY = useRef(new Animated.Value(0)).current;
   const [selectedTab, setSelectedTab] = useState(1);
   const [hasGoals, setHasGoals] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with true
+  const [initializing, setInitializing] = useState(true); // Add initialization state
+
+  /* ----- Auth state ----- */
+  const [user, setUser] = useState<any>(null);
 
   /* ----- Modals & création d'objectif ----- */
   const [modalVisible, setModalVisible] = useState(false);
@@ -113,122 +78,150 @@ export default function HomeScreen() {
 
   /* ----- Navigation & scroll state management ----- */
   const [isReturningFromNavigation, setIsReturningFromNavigation] = useState(false);
-  const currentScrollPosition = useRef<number>(0); // Track current scroll position in real time
+  const currentScrollPosition = useRef<number>(0);
 
   const router = useRouter();
-
   const { t } = useTranslation();
   const scrollViewRef = useRef<any>(null);
-  const savedScrollPosition = useRef<number>(0); // Save scroll position across navigation
-  const isFirstLoad = useRef<boolean>(true); // Track if this is the very first load
+  const savedScrollPosition = useRef<number>(0);
+  const isFirstLoad = useRef<boolean>(true);
+  const isDataFetched = useRef<boolean>(false);
+
+  /* ------------------------- AUTH INITIALIZATION -------------------------- */
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+        }
+        
+        if (mounted) {
+          setUser(session?.user || null);
+          setInitializing(false);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        if (mounted) {
+          setUser(null);
+          setInitializing(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
+        if (mounted) {
+          setUser(session?.user || null);
+          
+          if (!session?.user) {
+            setGoal(null);
+            setAllLevels([]);
+            setHasGoals(false);
+            isDataFetched.current = false;
+          }
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   /* ------------------------- RÉCUPÉRATION DU GOAL ------------------------- */
   useEffect(() => {
-    async function fetchGoalAndLevels() {
-      setLoading(true);
-      const fetchedGoal = await fetchLatestGoalForUser();
-      setGoal(fetchedGoal);
-      setHasGoals(!!fetchedGoal);
+    if (!user || initializing || isDataFetched.current) {
       setLoading(false);
-
-      if (fetchedGoal && fetchedGoal.levels) {
-        const flat = (fetchedGoal.levels as any[]).flatMap((section: any) =>
-          (section.levels as any[]).map((lvl: any) => ({
-            ...lvl,
-            sectionTitle: section.title,
-            sectionSummary: section.summary,
-          })),
-        );
-        setAllLevels(flat);
-      } else {
-        setAllLevels([]);
-      }
+      return;
     }
-    fetchGoalAndLevels();
-  }, []);
 
+    let mounted = true;
 
-  // Optimisation: Mémoriser les niveaux
-  const levels = useMemo(() => 
-    Array.from({ length: LEVEL_COUNT }, (_, i) => {
-      const y = CURVE_HEIGHT - INTERVAL * (i + 1);
-      return { y, number: i + 1 };
-    }), 
-    []
-  );
+    async function fetchGoalAndLevels() {
+      if (!mounted) return;
+      
+      setLoading(true);
+      isDataFetched.current = true;
+      
+      try {
+        const fetchedGoal = await fetchLatestGoalForUser();
+        console.log('Fetched goal (initial):', fetchedGoal);
+        
+        if (!mounted) return;
+        
+        setGoal(fetchedGoal);
+        setHasGoals(!!fetchedGoal);
 
-  // Optimisation: Mémoriser le chemin SVG
-  const path = useMemo(() => 
-    Array.from({ length: 200 }, (_, i) => {
-      const y = CURVE_HEIGHT - (i / 199) * CURVE_HEIGHT;
-      const x = getSineX(y);
-      return `${i === 0 ? 'M' : 'L'}${x},${y}`;
-    }).join(' '), 
-    []
-  );
-
-  // Optimisation: Mémoriser le gestionnaire de scroll
-  const handleScroll = useCallback(
-    Animated.event(
-      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-      {
-        useNativeDriver: false,
-        listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-          const y = e.nativeEvent.contentOffset.y;
-          let minDist = Infinity;
-          let minIdx = 0;
-          for (let i = 0; i < levels.length; i++) {
-            const dist = Math.abs((levels[i].y - y) - height / 2);
-            if (dist < minDist) {
-              minDist = dist;
-              minIdx = i;
+        if (fetchedGoal && fetchedGoal.levels) {
+          let processedLevels;
+          if (Array.isArray(fetchedGoal.levels)) {
+            if (fetchedGoal.levels[0] && fetchedGoal.levels[0].levels) {
+              processedLevels = fetchedGoal.levels.flatMap((section: any) =>
+                (section.levels as any[]).map((lvl: any) => ({
+                  ...lvl,
+                  sectionTitle: section.title,
+                  sectionSummary: section.summary,
+                }))
+              );
+            } else {
+              processedLevels = fetchedGoal.levels;
             }
+          } else if (typeof fetchedGoal.levels === 'object') {
+            if (fetchedGoal.levels.levels) {
+              processedLevels = fetchedGoal.levels.levels;
+            } else {
+              processedLevels = Object.values(fetchedGoal.levels);
+            }
+          } else {
+            processedLevels = [];
           }
-          setSelected(minIdx);
-        },
+          
+          if (mounted) {
+            setAllLevels(processedLevels || []);
+          }
+        } else {
+          if (mounted) {
+            setAllLevels([]);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching goal and levels:', error);
+        if (mounted) {
+          setHasGoals(false);
+          setAllLevels([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
-    ),
-    [levels]
-  );
-
-  // Optimisation: Mémoriser le gestionnaire de sélection d'onglet
-  const handleTabSelect = useCallback((idx: number) => {
-    setSelectedTab(idx);
-    // Consistent navigation logic
-    if (idx === 0) {
-      router.push('/StatsPage');
-    } else if (idx === 1) {
-      // Already on HomeScreen, no navigation needed
-  /* ---------------------- NAVIGATION STATE DETECTION ---------------------- */
-  useEffect(() => {
-    // This will run when the component mounts
-    // If isFirstLoad is false, it means we're returning from navigation
-    if (!isFirstLoad.current) {
-      setIsReturningFromNavigation(true);
     }
-  }, []);
+
+    fetchGoalAndLevels();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user, initializing]);
 
   /* ------------------------------ COURBE ---------------------------------- */
-  const CURVE_HEIGHT = height * 6;
-  const CURVE_WIDTH = width;
-  const AMPLITUDE = width * 0.25;
-  const CIRCLE_RADIUS = 32;
-  const EXPANDED_RADIUS = 70;
-  const OSCILLATIONS = 6;
-
-  /** Points de la sinusoidale - REVERSED DIRECTION */
   const curvePoints = React.useMemo(() => {
     const pts: { x: number; y: number }[] = [];
     for (let y = 0; y <= CURVE_HEIGHT; y += 3) {
       const normY = y / CURVE_HEIGHT;
-      // Reversed sine wave - starts from right, goes to left as we go up
       const x = CURVE_WIDTH / 2 - AMPLITUDE * Math.sin(normY * 2 * Math.PI * OSCILLATIONS);
       pts.push({ x, y });
     }
     return pts;
-  }, [CURVE_HEIGHT, CURVE_WIDTH, AMPLITUDE, OSCILLATIONS]);
+  }, []);
 
-  /** Path SVG */
   const curvePath = React.useMemo(() => {
     if (!curvePoints.length) return '';
     return curvePoints.reduce(
@@ -237,22 +230,18 @@ export default function HomeScreen() {
     );
   }, [curvePoints]);
 
-  /** Position de chaque niveau sur la courbe - REVERSED ORDER AND MORE SPREAD */
   const getLevelPositionOnCurve = React.useCallback((idx: number) => {
     if (allLevels.length === 0) return { x: CURVE_WIDTH / 2, y: CURVE_HEIGHT / 2 };
 
-    // Much more spread out - use almost the entire curve
-    const PADDING_PERCENT = 0.005; // Minimal padding (0.5%) for maximum spread
+    const PADDING_PERCENT = 0.005;
     const usableHeight = CURVE_HEIGHT * (1 - 2 * PADDING_PERCENT);
     const startY = CURVE_HEIGHT * PADDING_PERCENT;
     
-    // REVERSED: Higher level numbers should be higher up (lower Y values)
-    // So we invert the index calculation
     const reversedIdx = allLevels.length === 1 ? 0 : (allLevels.length - 1 - idx);
     
     const curveProgress = allLevels.length === 1 
-      ? 0.5 // Center single level
-      : reversedIdx / (allLevels.length - 1); // Distribute from 0 to 1, but reversed
+      ? 0.5
+      : reversedIdx / (allLevels.length - 1);
     
     const targetY = startY + (curveProgress * usableHeight);
 
@@ -267,93 +256,20 @@ export default function HomeScreen() {
       }
     }
     return closest;
-  }, [allLevels.length, curvePoints, CURVE_HEIGHT, CURVE_WIDTH]);
+  }, [allLevels.length, curvePoints]);
 
   const levelPositions = React.useMemo(() => 
     allLevels.map((_, i) => getLevelPositionOnCurve(i)), 
     [allLevels, getLevelPositionOnCurve]
   );
 
-  // Calculate initial scroll position based on whether this is first load or returning from navigation
   const initialScrollY = React.useMemo(() => {
     if (isFirstLoad.current && !isReturningFromNavigation) {
-      // True first load: start at bottom for reveal effect
-      console.log('First load - starting at bottom:', CURVE_HEIGHT + height * 1.5 - height);
       return CURVE_HEIGHT + height * 1.5 - height;
     } else {
-      // Returning from navigation: use saved position
-      console.log('Returning from navigation - using saved position:', savedScrollPosition.current);
       return savedScrollPosition.current;
     }
-  }, [CURVE_HEIGHT, height, isReturningFromNavigation]);
-
-  // Helper to scroll to the current level
-  const scrollToCurrentLevel = React.useCallback(() => {
-    if (!levelPositions.length || !goal?.current_level) return;
-    
-    // Use validatedLevel (1-based) to find the current accessible level
-    const [validatedLevel] = goal.current_level.split('_').map(Number);
-    
-    // Find the index in allLevels array (0-based) that matches the validatedLevel (1-based)
-    const lvlIdx = allLevels.findIndex(lvl => lvl.level_number === validatedLevel);
-    
-    if (lvlIdx === -1) {
-      console.log(`Level ${validatedLevel} not found in allLevels array`);
-
-      return;
-    }
-
-    
-    console.log(`Scrolling to level ${validatedLevel} at array index ${lvlIdx}`);
-    console.log(`Level positions length: ${levelPositions.length}`);
-    console.log(`All levels:`, allLevels.map(l => l.level_number));
-    
-    // IMPORTANT: The levelPositions array uses the same order as allLevels array
-    // So we use lvlIdx directly (no need to reverse it again)
-    const { y } = levelPositions[lvlIdx];
-    
-    console.log(`Position for level ${validatedLevel}: y=${y}`);
-    
-    // Center the level in the viewport, accounting for the marginTop offset
-    const scrollY = Math.max(0, y + height * 0.5 - height / 2);
-    
-    console.log(`Final scroll position: ${scrollY}`);
-    
-    // Use slower animation (2 seconds instead of default)
-    scrollViewRef.current?.scrollTo({ y: scrollY, animated: true });
-    
-    // Save the position after scrolling
-    savedScrollPosition.current = scrollY;
-    
-  }, [levelPositions, goal, allLevels, height]);
-
-  // Handle scroll position management and initial load
-  useEffect(() => {
-    if (levelPositions.length && goal?.current_level) {
-      if (isFirstLoad.current && !isReturningFromNavigation) {
-        // Only auto-scroll on true first load
-        console.log('First load - will scroll to current level after delay');
-        const timer = setTimeout(() => {
-          scrollToCurrentLevel();
-          isFirstLoad.current = false;
-        }, 600);
-        return () => clearTimeout(timer);
-      } else if (isReturningFromNavigation) {
-        // Returning from navigation: just restore position without animation
-        console.log('Returning from navigation - restoring position:', savedScrollPosition.current);
-        const timer = setTimeout(() => {
-          if (scrollViewRef.current) {
-            scrollViewRef.current.scrollTo({ 
-              y: savedScrollPosition.current, 
-              animated: false // No animation when returning
-            });
-          }
-          setIsReturningFromNavigation(false);
-        }, 50); // Reduced timeout
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [scrollToCurrentLevel, levelPositions, goal, isReturningFromNavigation]);
+  }, [isReturningFromNavigation]);
 
   // Parse current_level from Supabase (e.g., '1_1' for first level/first subquest, 1-based)
   const [validatedLevel, validatedSubquest] = React.useMemo(() => {
@@ -362,6 +278,27 @@ export default function HomeScreen() {
     return [lvl ?? 1, sq ?? 1];
   }, [goal]);
 
+  // Helper to scroll to the current level
+  const scrollToCurrentLevel = React.useCallback(() => {
+    if (!levelPositions.length || !goal?.current_level) return;
+    // Use validatedLevel (1-based) to find the current accessible level
+    const [validatedLevel] = goal.current_level.split('_').map(Number);
+    // Find the index in allLevels array (0-based) that matches the validatedLevel (1-based)
+    const lvlIdx = allLevels.findIndex(lvl => lvl.level_number === validatedLevel);
+    if (lvlIdx === -1) {
+      console.log(`Level ${validatedLevel} not found in allLevels array`);
+      return;
+    }
+    // The levelPositions array uses the same order as allLevels array
+    const { y } = levelPositions[lvlIdx];
+    // Center the level in the viewport, accounting for the marginTop offset
+    const scrollY = Math.max(0, y + height * 0.5 - height / 2);
+    scrollViewRef.current?.scrollTo({ y: scrollY, animated: true });
+    // Save the position after scrolling
+    savedScrollPosition.current = scrollY;
+  }, [levelPositions, goal, allLevels, height, scrollViewRef, savedScrollPosition]);
+
+  // Validate a subquest
   const handleValidateSubquest = async (levelIdx: number, subquestIdx: number) => {
     const levelNum = levelIdx + 1;
     const subquestNum = subquestIdx + 1;
@@ -380,7 +317,6 @@ export default function HomeScreen() {
     const updatedGoal = await fetchLatestGoalForUser();
     setGoal(updatedGoal);
     setSelectedLevelData(allLevels[levelIdx]);
-    
     // Scroll to the newly current level when validating
     setTimeout(() => {
       scrollToCurrentLevel();
@@ -401,35 +337,66 @@ export default function HomeScreen() {
     const levelNum = levelIdx + 1;
     const level = allLevels[levelIdx];
     if (!level || !level.sub_quests || validatedLevel !== levelNum || validatedSubquest <= level.sub_quests.length) return;
-    
     // Move to next level, first subquest (reset subquest to 1)
     const newCurrentLevel = `${levelNum + 1}_1`;
     await supabase.from('goals').update({ current_level: newCurrentLevel }).eq('id', goal.id);
     const updatedGoal = await fetchLatestGoalForUser();
     setGoal(updatedGoal);
-    
     // Close the current level modal
     setSelectedLevelData(null);
     setLevelModalVisible(false);
-    
     // Show the level unlocked banner
     setLevelUnlockedBanner(true);
     setTimeout(() => setLevelUnlockedBanner(false), 2000);
-    
     // Scroll to the newly unlocked level
     setTimeout(() => {
       scrollToCurrentLevel();
     }, 300);
   };
 
+  // Function to refresh data after level creation
+  const refreshData = useCallback(async () => {
+    try {
+      const fetchedGoal = await fetchLatestGoalForUser();
+      if (fetchedGoal) {
+        setGoal(fetchedGoal);
+        setHasGoals(!!fetchedGoal);
+        
+        if (fetchedGoal.levels) {
+          let processedLevels;
+          if (Array.isArray(fetchedGoal.levels)) {
+            if (fetchedGoal.levels[0] && fetchedGoal.levels[0].levels) {
+              processedLevels = fetchedGoal.levels.flatMap((section: any) =>
+                (section.levels as any[]).map((lvl: any) => ({
+                  ...lvl,
+                  sectionTitle: section.title,
+                  sectionSummary: section.summary,
+                }))
+              );
+            } else {
+              processedLevels = fetchedGoal.levels;
+            }
+          } else if (typeof fetchedGoal.levels === 'object') {
+            if (fetchedGoal.levels.levels) {
+              processedLevels = fetchedGoal.levels.levels;
+            } else {
+              processedLevels = Object.values(fetchedGoal.levels);
+            }
+          } else {
+            processedLevels = [];
+          }
+          setAllLevels(processedLevels || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    }
+  }, []);
+
   /* -------------------------- HANDLERS ------------------------------------ */
   const handleTabSelect = (idx: number) => {
-    // Save current scroll position BEFORE changing selectedTab
-    console.log('Saving scroll position before navigation:', currentScrollPosition.current);
     savedScrollPosition.current = currentScrollPosition.current;
-    
     setSelectedTab(idx);
-    
     if (idx === 0) router.push('/StatsPage');
     if (idx === 2) router.push('/CommunityPage');
   };
@@ -439,41 +406,27 @@ export default function HomeScreen() {
     setSelectedLevelData(level);
     setLevelModalVisible(true);
   };
->
 
   const handleGoalSubmit = async () => {
     setLoading(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
       const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook/Question_Creation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ goal: goalInput }),
       });
-      console.log('Webhook response status:', response.status);
       const raw = await response.text();
-      console.log('Webhook raw response:', raw);
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch (e) {
-        console.log('Failed to parse JSON:', e);
-        throw e;
-      }
-      console.log('Parsed webhook data:', data);
+      const data = JSON.parse(raw);
       const parsed = JSON.parse(data[0].text);
-      console.log('Parsed questions:', parsed);
       setQuestions((parsed.questions as any[]).map((q: any) => q.question));
       setAnswers(Array((parsed.questions as any[]).length).fill(''));
       setCurrentQuestion(0);
       setQuestionsModalVisible(true);
       setHasGoals(true);
-      setWaitingQuestions(false);
       setGoalInput('');
       setLastGoal(goalInput);
     } catch (e) {
-      console.log('Erreur lors de l\'envoi de l\'objectif:', e);
+      Alert.alert('Erreur', "Impossible d'envoyer l'objectif. Veuillez réessayer.");
     } finally {
       setLoading(false);
       setConfirmVisible(false);
@@ -481,73 +434,57 @@ export default function HomeScreen() {
   };
 
   /* ----------------------------- RENDER ----------------------------------- */
-  if (loading) {
+  if (initializing) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0A1B2B', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={ORANGE} />
+        <Text style={{ color: '#fff', marginTop: 16 }}>Initialisation...</Text>
       </View>
     );
   }
 
-  /* ------------------------------ UI -------------------------------------- */
+  if (!user) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A1B2B', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ color: '#fff', fontSize: 18, marginBottom: 20 }}>Vous devez être connecté</Text>
+        <TouchableOpacity
+          style={{ backgroundColor: ORANGE, padding: 16, borderRadius: 8 }}
+          onPress={() => router.push('/AuthPage')}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Se connecter</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A1B2B', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={ORANGE} />
+        <Text style={{ color: '#fff', marginTop: 16 }}>Chargement...</Text>
+      </View>
+    );
+  }
+
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* --------------------------- MODALS --------------------------------- */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
-      >
+      {/* Modals here */}
+      <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('homeScreen.goal_modal_title')}</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder={t('homeScreen.goal_placeholder')}
-              value={goalInput}
-              onChangeText={setGoalInput}
-              autoFocus
-              returnKeyType="done"
-              blurOnSubmit={true}
-              onSubmitEditing={() => Keyboard.dismiss()}
-            />
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={() => setConfirmVisible(true)}
-              disabled={!goalInput.trim()}
-            >
-              <Text style={styles.modalButtonText}>{t('homeScreen.validate')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
-              <Text style={styles.modalCancelText}>{t('homeScreen.cancel')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Confirmation Modal */}
-      <Modal
-        visible={confirmVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setConfirmVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('homeScreen.confirm_goal')}</Text>
+            <Text style={styles.modalTitle}>Confirmer l&apos;objectif</Text>
             <Text style={{ fontSize: 16, color: '#3A5A6A', marginBottom: 16, textAlign: 'center' }}>{goalInput}</Text>
             {loading ? (
               <ActivityIndicator size="large" color={ORANGE} />
             ) : (
               <>
                 <TouchableOpacity style={styles.modalButton} onPress={handleGoalSubmit}>
-                  <Text style={styles.modalButtonText}>{t('homeScreen.send')}</Text>
+                  <Text style={styles.modalButtonText}>Envoyer</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setConfirmVisible(false)}>
-                  <Text style={styles.modalCancelText}>{t('homeScreen.cancel')}</Text>
+                  <Text style={styles.modalCancelText}>Annuler</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -555,123 +492,6 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* Questions Modal */}
-      <Modal
-        visible={questionsModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setQuestionsModalVisible(false)}
-      >
-<KeyboardAvoidingView 
-  style={{ flex: 1 }} 
-  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
->
-  <View style={styles.modalOverlay}>
-    <View style={styles.modalCard}>
-
-      {/* Header avec flèche de retour si pas la première question */}
-      <View style={styles.modalHeader}>
-        {currentQuestion === 0 ? (
-          <View style={{ width: 40 }} />
-        ) : (
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => setCurrentQuestion(currentQuestion - 1)}
-          >
-            <Text style={styles.backButtonText}>
-              {t('homeScreen.back') || 'Précédent'}
-            </Text>
-          </TouchableOpacity>
-        )}
-        <Text style={styles.modalTitle}>
-          {t('homeScreen.question_number', { current: currentQuestion + 1, total: questions.length }) ||
-            `Question ${currentQuestion + 1} / ${questions.length}`}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {/* Question */}
-      <Text style={styles.questionText}>{questions[currentQuestion]}</Text>
-
-      {/* Réponse */}
-      <TextInput
-        style={styles.modalInput}
-        placeholder={t('homeScreen.answer_placeholder') || 'Votre réponse...'}
-        value={answers[currentQuestion]}
-        onChangeText={text => {
-          const newAnswers = [...answers];
-          newAnswers[currentQuestion] = text;
-          setAnswers(newAnswers);
-        }}
-        multiline
-        returnKeyType="done"
-        blurOnSubmit={true}
-        onSubmitEditing={() => Keyboard.dismiss()}
-      />
-
-      {/* Boutons navigation */}
-      <View style={{ flexDirection: 'row', marginTop: 16 }}>
-        <TouchableOpacity
-          style={[styles.modalButton, { opacity: currentQuestion === 0 ? 0.5 : 1 }]}
-          disabled={currentQuestion === 0}
-          onPress={() => setCurrentQuestion(currentQuestion - 1)}
-        >
-          <Text style={styles.modalButtonText}>
-            {t('homeScreen.previous') || 'Précédent'}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={{ width: 16 }} />
-
-        <TouchableOpacity
-          style={styles.modalButton}
-          onPress={async () => {
-            if (currentQuestion < questions.length - 1) {
-              setCurrentQuestion(currentQuestion + 1);
-            } else {
-              setQuestionsModalVisible(false);
-              try {
-                const { data: userData } = await supabase.auth.getUser();
-                const user = userData?.user;
-                const payload = {
-                  goal: lastGoal,
-                  responses: Object.fromEntries(questions.map((q, i) => [q, answers[i]])),
-                  user_id: user?.id || null,
-                };
-
-                await Promise.all([
-                  fetch('https://n8n.srv777212.hstgr.cloud/webhook/Level_Creation', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                  }),
-                  fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/Level_Creation', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                  }),
-                ]);
-              } catch (err) {
-                console.log('Level_Creation webhook error:', err);
-              }
-            }
-          }}
-        >
-          <Text style={styles.modalButtonText}>
-            {currentQuestion < questions.length - 1
-              ? t('homeScreen.next') || 'Suivant'
-              : t('homeScreen.finish') || 'Terminer'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-    </View>
-  </View>
-</KeyboardAvoidingView>
-
-      </Modal>
-
-      {/* Level Details Modal - NEW CENTERED MODAL */}
       <Modal
         visible={levelModalVisible}
         transparent
@@ -746,24 +566,14 @@ export default function HomeScreen() {
       </Modal>
 
       <ImageBackground source={require('../assets/images/Untitled.png')} style={styles.container} resizeMode="cover">
-        {/* Banner for unlocked level */}
-        {levelUnlockedBanner && (
-          <View style={{ position: 'absolute', top: 40, left: 0, right: 0, zIndex: 100, alignItems: 'center' }}>
-            <View style={{ backgroundColor: ORANGE, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 32, shadowColor: ORANGE, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 }}>
-              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>Nouveau niveau débloqué !</Text>
-            </View>
-          </View>
-        )}
         <View style={styles.content}>
           {hasGoals === false ? (
-            /* ----------------------- Pas de quête => QuestBox --------------- */
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View style={{ flex: 1 }}>
-                <AnimatedQuestBox t={t} />
+                <AnimatedQuestBox t={t} onComplete={refreshData} />
               </View>
             </TouchableWithoutFeedback>
           ) : (
-            /* ------------------------- Vue avec courbe + niveaux ------------ */
             <View style={{ flex: 1 }}>
               <AnimatedScrollView
                 ref={scrollViewRef}
@@ -771,58 +581,40 @@ export default function HomeScreen() {
                 contentContainerStyle={{ height: CURVE_HEIGHT + height * 1.5 }}
                 showsVerticalScrollIndicator={false}
                 scrollEventThrottle={16}
-                contentOffset={{ x: 0, y: initialScrollY }} // Start position based on state
+                contentOffset={{ x: 0, y: initialScrollY }}
                 onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-      useNativeDriver: false,
-      listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+                  useNativeDriver: false,
+                  listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
                     const yOffset = e.nativeEvent.contentOffset.y;
-                    
-                    // Update current scroll position in real time
                     currentScrollPosition.current = yOffset;
                     
-        let minDist = Infinity;
-        let minIdx = 0;
+                    let minDist = Infinity;
+                    let minIdx = 0;
                     for (let i = 0; i < allLevels.length; i++) {
-                      // Adjust for the marginTop offset when calculating distances
                       const lvlY = (levelPositions[i]?.y || 0) + height * 0.5;
                       const dist = Math.abs(lvlY - yOffset - height / 2);
-          if (dist < minDist) {
-            minDist = dist;
-            minIdx = i;
-          }
-        }
+                      if (dist < minDist) {
+                        minDist = dist;
+                        minIdx = i;
+                      }
+                    }
                     setExpandedLevel(minIdx);
                   },
                 })}
               >
-                {/* ------------ Conteneur qui SCROLLE avec la courbe ------------ */}
                 <View style={{ width: CURVE_WIDTH, height: CURVE_HEIGHT, marginTop: height * 0.5 }}>
-                  {/* Courbe SVG (scrolle puisque dans le même conteneur) */}
-                  <Svg
-                    width={CURVE_WIDTH}
-                    height={CURVE_HEIGHT}
-                    style={{ position: 'absolute', top: 0, left: 0 }}
-                  >
-                    <Path
-                      d={curvePath}
-                      stroke={ORANGE}
-                      strokeWidth={4}
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                  <Svg width={CURVE_WIDTH} height={CURVE_HEIGHT} style={{ position: 'absolute', top: 0, left: 0 }}>
+                    <Path d={curvePath} stroke={ORANGE} strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
 
-                  {/* --------------------------- Cercles niveaux --------------- */}
                   {allLevels.map((level, i) => {
                     const { x, y } = levelPositions[i] || { x: CURVE_WIDTH / 2, y: CURVE_HEIGHT / 2 };
                     const selected = expandedLevel === i;
-                    const levelNum = level.level_number;
-                    // Only levels with levelNum < validatedLevel are completed
+                    const levelNum = level.level_number || (i + 1);
                     const isCompleted = levelNum < validatedLevel;
-                    // Only the current level is accessible
                     const isCurrent = levelNum === validatedLevel;
                     const isAccessible = isCompleted || isCurrent;
+                    
                     return (
                       <View
                         key={i}
@@ -855,7 +647,7 @@ export default function HomeScreen() {
                             {selected ? (
                               <>
                                 <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', marginBottom: 8 }}>
-                                  {`Niveau ${level.level_number || i + 1}`}
+                                  {`Niveau ${levelNum}`}
                                 </Text>
                                 <View
                                   style={{
@@ -879,7 +671,7 @@ export default function HomeScreen() {
                               </>
                             ) : (
                               <Text style={{ color: isCompleted ? '#fff' : '#3A5A6A', fontSize: 20, fontWeight: 'bold' }}>
-                                {level.level_number || i + 1}
+                                {levelNum}
                               </Text>
                             )}
                             {isCompleted && !selected && (
@@ -889,7 +681,7 @@ export default function HomeScreen() {
                         ) : (
                           <View style={{ flex: 1, width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: 0.6 }}>
                             <Ionicons name="lock-closed" size={28} color="#888" style={{ marginBottom: 4 }} />
-                            <Text style={{ color: '#888', fontSize: 18, fontWeight: 'bold' }}>{level.level_number || i + 1}</Text>
+                            <Text style={{ color: '#888', fontSize: 18, fontWeight: 'bold' }}>{levelNum}</Text>
                           </View>
                         )}
                       </View>
@@ -901,15 +693,14 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* ------------------------------- NAVBAR ----------------------------- */}
         <BottomNavBar selectedIndex={selectedTab} onSelect={handleTabSelect} />
       </ImageBackground>
     </>
   );
 }
 
-// --- Composant animé pour la box de quête ---
-function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) {
+// Fixed AnimatedQuestBox component
+function AnimatedQuestBox({ t, onComplete }: { t: (key: string, options?: any) => string; onComplete: () => void }) {
   const [step, setStep] = useState<'intro' | 'input' | 'questions'>('intro');
   const [goalInput, setGoalInput] = useState('');
   const [questions, setQuestions] = useState<string[]>([]);
@@ -921,7 +712,6 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
   const [questionsAnim] = useState(new Animated.Value(0));
   const [loading, setLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const router = useRouter();
   const rotateAnim = useRef(new Animated.Value(0)).current;
 
   const handleLaunch = () => {
@@ -956,32 +746,8 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
         useNativeDriver: true,
       })
     ).start();
+    
     try {
-
-      // Récupérer l'utilisateur connecté
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      console.log('Tentative d\'insertion dans goals :', { user_id: user?.id, titre: goalInput, statut: 'nouveau' });
-      // Insérer l'objectif dans la table goals
-      if (user && user.id) {
-        const { error: insertError } = await supabase
-          .from('goals')
-          .insert({
-            user_id: user.id,
-            titre: goalInput,
-            statut: 'nouveau',
-          });
-        if (insertError) {
-          console.log('Erreur insertion goals :', insertError);
-          setLoading(false);
-          rotateAnim.stopAnimation();
-          rotateAnim.setValue(0);
-          return;
-        } else {
-          console.log('Insertion goals réussie !');
-        }
-      }
-
       const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook/Question_Creation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -989,10 +755,7 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
       });
       const isOk = response.ok;
       response.json().then(jsonArr => {
-        console.log('Réponse n8n:', jsonArr);
-
         setTimeout(async () => {
-
           try {
             const textObj = JSON.parse(jsonArr[0].text);
             const qList = textObj.questions.map((q: any) => q.question);
@@ -1010,12 +773,9 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
               useNativeDriver: true,
             }).start();
           } catch (err) {
-
             setLoading(false);
             rotateAnim.stopAnimation();
             rotateAnim.setValue(0);
-           
-
           }
         }, 1000);
       });
@@ -1023,7 +783,6 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
       setLoading(false);
       rotateAnim.stopAnimation();
       rotateAnim.setValue(0);
-      console.log("Erreur lors de l'envoi de l'objectif:", e);
     }
   };
 
@@ -1040,7 +799,6 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
     } else {
-
       try {
         const { data: userData } = await supabase.auth.getUser();
         const user = userData?.user;
@@ -1051,26 +809,19 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
           user_id: user?.id || null,
         };
         
-        await Promise.all([
-          fetch('https://n8n.srv777212.hstgr.cloud/webhook/Level_Creation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          }),
-          fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/Level_Creation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          }),
-        ]);
+        await fetch('https://n8n.srv777212.hstgr.cloud/webhook/Level_Creation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
         
-        
-        // Optionally refresh the page or navigate
-        window.location.reload();
+        // Fixed: Use the callback instead of window.location.reload()
+        setTimeout(() => {
+          onComplete();
+        }, 3000);
       } catch (err) {
-        
+        console.log('Level creation error:', err);
       }
-
     }
   };
 
@@ -1090,12 +841,10 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
           }}
         >
           <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 12 }}>
-
             {t('homeScreen.no_quest_title')}
           </Text>
           <Text style={{ color: '#71ABA4', fontSize: 17, textAlign: 'center', marginBottom: 28 }}>
             {t('homeScreen.no_quest_subtitle')}
-
           </Text>
           <TouchableOpacity
             style={{
@@ -1251,8 +1000,6 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
             position: 'absolute',
           }}
         >
-
-          {/* Header compact avec flèche retour, barre de progression fine et numéro de question */}
           <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 18 }}>
             {currentQuestion > 0 && (
               <TouchableOpacity 
@@ -1279,7 +1026,6 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
                 {`${currentQuestion + 1} / ${questions.length}`}
               </Text>
             </View>
-
           </View>
           <Text style={{ color: '#3A5A6A', fontSize: 18, textAlign: 'center', marginBottom: 18 }}>
             {questions[currentQuestion]}
@@ -1329,9 +1075,9 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
             activeOpacity={0.85}
             onPress={handleNext}
           >
-
-            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>{currentQuestion === questions.length - 1 ? t('homeScreen.finish') : t('homeScreen.next')}</Text>
-
+            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>
+              {currentQuestion === questions.length - 1 ? t('homeScreen.finish') : t('homeScreen.next')}
+            </Text>
           </TouchableOpacity>
         </Animated.View>
       )}
@@ -1340,29 +1086,54 @@ function AnimatedQuestBox({ t }: { t: (key: string, options?: any) => string }) 
 }
 
 async function fetchLatestGoalForUser() {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData?.user) {
-    console.log('User not found or error:', userError);
+  try {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData?.user) {
+      console.log('User not found or error:', userError);
+      return null;
+    }
+    const userId = userData.user.id;
+    console.log('Fetching goals for user:', userId);
+
+    const { data, error } = await supabase
+      .from('goals')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.log('Supabase fetch error:', error);
+      return null;
+    }
+    
+    console.log('Raw Supabase data:', data);
+    
+    if (data && data.length > 0) {
+      const goal = data[0];
+      console.log('Found goal:', goal);
+      
+      if (!goal.current_level) {
+        console.log('No current_level found, setting default to 1_1');
+        const { error: updateError } = await supabase
+          .from('goals')
+          .update({ current_level: '1_1' })
+          .eq('id', goal.id);
+        
+        if (!updateError) {
+          goal.current_level = '1_1';
+        }
+      }
+      
+      return goal;
+    }
+    
+    console.log('No goals found for user');
+    return null;
+  } catch (error) {
+    console.error('Error in fetchLatestGoalForUser:', error);
     return null;
   }
-  const userId = userData.user.id;
-
-  const { data, error } = await supabase
-    .from('goals')
-    .select('id, titre, levels, current_level')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (error) {
-    console.log('Supabase fetch error:', error);
-    return null;
-  }
-  if (data && data.length > 0) {
-    const goal = data[0];
-    return goal;
-  }
-  return null;
 }
 
 const styles = StyleSheet.create({
@@ -1420,6 +1191,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 32,
     marginBottom: 8,
+    alignItems: 'center',
   },
   modalButtonText: {
     color: '#fff',
@@ -1439,7 +1211,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
   },
-
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1453,8 +1224,7 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 24,
     color: '#71ABA4',
-
-  // New styles for the level modal
+  },
   levelModalCard: {
     width: '90%',
     height: '85%',
@@ -1570,6 +1340,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-
   },
 });

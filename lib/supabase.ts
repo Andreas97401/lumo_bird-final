@@ -141,6 +141,6 @@ export const signOut = async () => {
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Erreur de déconnexion'
-    };
-  }
-}; 
+    };
+  }
+};
