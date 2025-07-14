@@ -1,9 +1,28 @@
+/* HomeScreen.tsx */
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, Easing, ImageBackground, Keyboard, Modal, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StatusBar, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  ImageBackground,
+  Keyboard,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
 
 import Svg, { Path } from 'react-native-svg';
 
@@ -11,180 +30,323 @@ import BottomNavBar from '../components/BottomNavBar';
 import { Text } from '../components/Text';
 import { supabase } from '../lib/supabase';
 
-const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
+/* -------------------------------------------------------------------------- */
+/*                          CONSTANTES & UTILITAIRES                          */
+/* -------------------------------------------------------------------------- */
 
+const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 const { width, height } = Dimensions.get('window');
 const statusBarHeight = StatusBar.currentHeight || 0;
-const CURVE_HEIGHT = height * 3;
-const CURVE_WIDTH = width;
-const AMPLITUDE = width * 0.28;
-const LEVEL_COUNT = 8;
-const INTERVAL = CURVE_HEIGHT / (LEVEL_COUNT + 1);
-const CIRCLE_RADIUS = 32;
-const EXPANDED_RADIUS = 60;
-const CIRCLE_COLOR = '#71ABA4';
-const EXPANDED_COLOR = '#fff';
-const TEXT_COLOR = '#71ABA4';
-const EXPANDED_TEXT_COLOR = '#3A5A6A';
 const ORANGE = '#FD8B5A';
-const OSCILLATIONS = 3;
 
-function getSineX(y: number) {
-  return CURVE_WIDTH / 2 + AMPLITUDE * Math.sin((y / CURVE_HEIGHT) * 2 * Math.PI * OSCILLATIONS);
-}
-
-function LevelCircle({
-  y, number, isSelected, onPress
-}: {
-  y: number;
-  number: number;
-  isSelected: boolean;
-  onPress: () => void;
-}) {
-  const x = getSineX(y);
-  return (
-    <Animated.View
-      style={[
-        styles.levelCircle,
-        {
-          left: x - (isSelected ? EXPANDED_RADIUS : CIRCLE_RADIUS),
-          top: y - (isSelected ? EXPANDED_RADIUS : CIRCLE_RADIUS),
-          width: isSelected ? EXPANDED_RADIUS * 2 : CIRCLE_RADIUS * 2,
-          height: isSelected ? EXPANDED_RADIUS * 2 : CIRCLE_RADIUS * 2,
-          backgroundColor: isSelected ? EXPANDED_COLOR : CIRCLE_COLOR,
-          zIndex: isSelected ? 2 : 1,
-          borderWidth: isSelected ? 2 : 0,
-          borderColor: ORANGE,
-          justifyContent: 'center',
-          alignItems: 'center',
-          position: 'absolute',
-          elevation: isSelected ? 5 : 1,
-          shadowColor: '#000',
-          shadowOpacity: isSelected ? 0.2 : 0,
-          shadowRadius: isSelected ? 8 : 0,
-        },
-      ]}
-    >
-      <TouchableOpacity style={{flex:1, justifyContent:'center', alignItems:'center'}} onPress={onPress} activeOpacity={0.8}>
-        <Text style={{
-          color: isSelected ? EXPANDED_TEXT_COLOR : '#fff',
-          fontSize: isSelected ? 24 : 18,
-          fontWeight: 'bold',
-        }}>{isSelected ? `Niveau ${number}` : `${number}`}</Text>
-        {isSelected && (
-          <View style={styles.plusCircle}>
-            <Text style={{ color: ORANGE, fontSize: 28, fontWeight: 'bold' }}>+</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-      {isSelected && (
-        <View style={styles.taskListPlaceholder}>
-          <Text style={{ color: '#888', fontSize: 16, marginTop: 8 }}>[Liste de tâches ici]</Text>
-        </View>
-      )}
-    </Animated.View>
-  );
-}
+/* -------------------------------------------------------------------------- */
+/*                                COMPOSANT                                   */
+/* -------------------------------------------------------------------------- */
 
 export default function HomeScreen() {
+  /* ------------------------------ STATES ---------------------------------- */
   const scrollY = useRef(new Animated.Value(0)).current;
-  const [selected, setSelected] = useState(0);
-
-  
-
+  const [selectedTab, setSelectedTab] = useState(1);
   const [hasGoals, setHasGoals] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const [selectedTab, setSelectedTab] = useState(1); // Changed to 1 (center) for HomeScreen
-
-  const [modalVisible, setModalVisible] = useState(false); // Modal state
-  const [goalInput, setGoalInput] = useState(''); // Goal input state
-  const [confirmVisible, setConfirmVisible] = useState(false); // Confirmation modal
-  const [waitingQuestions, setWaitingQuestions] = useState(false); // Waiting for questions
-  const [loading, setLoading] = useState(false); // Loading state for webhook
-  // Questions modal state
+  /* ----- Modals & création d'objectif ----- */
+  const [modalVisible, setModalVisible] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
+  const [confirmVisible, setConfirmVisible] = useState(false);
   const [questionsModalVisible, setQuestionsModalVisible] = useState(false);
   const [questions, setQuestions] = useState<string[]>([]);
   const [answers, setAnswers] = useState<string[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  // Add a state to store the last submitted goal
+  const [waitingQuestions, setWaitingQuestions] = useState(false);
   const [lastGoal, setLastGoal] = useState('');
 
-  const router = useRouter();
+  /* ----- Niveaux & affichage ----- */
+  const [goal, setGoal] = useState<any>(null);
+  const [allLevels, setAllLevels] = useState<any[]>([]);
+  const [expandedLevel, setExpandedLevel] = useState<number | null>(null);
+  const [levelModalVisible, setLevelModalVisible] = useState(false);
+  const [selectedLevelData, setSelectedLevelData] = useState<any>(null);
+  const [levelUnlockedBanner, setLevelUnlockedBanner] = useState(false);
 
+  /* ----- Navigation & scroll state management ----- */
+  const [isReturningFromNavigation, setIsReturningFromNavigation] = useState(false);
+  const currentScrollPosition = useRef<number>(0); // Track current scroll position in real time
+
+  const router = useRouter();
+  const scrollViewRef = useRef<any>(null);
+  const savedScrollPosition = useRef<number>(0); // Save scroll position across navigation
+  const isFirstLoad = useRef<boolean>(true); // Track if this is the very first load
+
+  /* ------------------------- RÉCUPÉRATION DU GOAL ------------------------- */
   useEffect(() => {
-    const fetchGoals = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setHasGoals(false);
-          setLoading(false);
-          return;
-        }
-        const { data: goals, error } = await supabase
-          .from('goals')
-          .select('id')
-          .eq('user_id', user.id);
-        if (error) {
-          setHasGoals(false);
-        } else {
-          setHasGoals(goals && goals.length > 0);
-        }
-      } catch (e) {
-        setHasGoals(false);
-      } finally {
-        setLoading(false);
+    async function fetchGoalAndLevels() {
+      setLoading(true);
+      const fetchedGoal = await fetchLatestGoalForUser();
+      setGoal(fetchedGoal);
+      setHasGoals(!!fetchedGoal);
+      setLoading(false);
+
+      if (fetchedGoal && fetchedGoal.levels) {
+        const flat = (fetchedGoal.levels as any[]).flatMap((section: any) =>
+          (section.levels as any[]).map((lvl: any) => ({
+            ...lvl,
+            sectionTitle: section.title,
+            sectionSummary: section.summary,
+          })),
+        );
+        setAllLevels(flat);
+      } else {
+        setAllLevels([]);
       }
-    };
-    fetchGoals();
+    }
+    fetchGoalAndLevels();
   }, []);
 
-  const levels = Array.from({ length: LEVEL_COUNT }, (_, i) => {
-    const y = CURVE_HEIGHT - INTERVAL * (i + 1);
-    return { y, number: i + 1 };
-  });
-
-  const path = Array.from({ length: 200 }, (_, i) => {
-    const y = CURVE_HEIGHT - (i / 199) * CURVE_HEIGHT;
-    const x = getSineX(y);
-    return `${i === 0 ? 'M' : 'L'}${x},${y}`;
-  }).join(' ');
-
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: false,
-      listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-        const y = e.nativeEvent.contentOffset.y;
-        let minDist = Infinity;
-        let minIdx = 0;
-        for (let i = 0; i < levels.length; i++) {
-          const dist = Math.abs((levels[i].y - y) - height / 2);
-          if (dist < minDist) {
-            minDist = dist;
-            minIdx = i;
-          }
-        }
-        setSelected(minIdx);
-      },
+  /* ---------------------- NAVIGATION STATE DETECTION ---------------------- */
+  useEffect(() => {
+    // This will run when the component mounts
+    // If isFirstLoad is false, it means we're returning from navigation
+    if (!isFirstLoad.current) {
+      setIsReturningFromNavigation(true);
     }
+  }, []);
+
+  /* ------------------------------ COURBE ---------------------------------- */
+  const CURVE_HEIGHT = height * 6;
+  const CURVE_WIDTH = width;
+  const AMPLITUDE = width * 0.25;
+  const CIRCLE_RADIUS = 32;
+  const EXPANDED_RADIUS = 70;
+  const OSCILLATIONS = 6;
+
+  /** Points de la sinusoidale - REVERSED DIRECTION */
+  const curvePoints = React.useMemo(() => {
+    const pts: { x: number; y: number }[] = [];
+    for (let y = 0; y <= CURVE_HEIGHT; y += 3) {
+      const normY = y / CURVE_HEIGHT;
+      // Reversed sine wave - starts from right, goes to left as we go up
+      const x = CURVE_WIDTH / 2 - AMPLITUDE * Math.sin(normY * 2 * Math.PI * OSCILLATIONS);
+      pts.push({ x, y });
+    }
+    return pts;
+  }, [CURVE_HEIGHT, CURVE_WIDTH, AMPLITUDE, OSCILLATIONS]);
+
+  /** Path SVG */
+  const curvePath = React.useMemo(() => {
+    if (!curvePoints.length) return '';
+    return curvePoints.reduce(
+      (p, c, idx) => `${p}${idx === 0 ? `M${c.x},${c.y}` : ` L${c.x},${c.y}`}`,
+      '',
+    );
+  }, [curvePoints]);
+
+  /** Position de chaque niveau sur la courbe - REVERSED ORDER AND MORE SPREAD */
+  const getLevelPositionOnCurve = React.useCallback((idx: number) => {
+    if (allLevels.length === 0) return { x: CURVE_WIDTH / 2, y: CURVE_HEIGHT / 2 };
+
+    // Much more spread out - use almost the entire curve
+    const PADDING_PERCENT = 0.005; // Minimal padding (0.5%) for maximum spread
+    const usableHeight = CURVE_HEIGHT * (1 - 2 * PADDING_PERCENT);
+    const startY = CURVE_HEIGHT * PADDING_PERCENT;
+    
+    // REVERSED: Higher level numbers should be higher up (lower Y values)
+    // So we invert the index calculation
+    const reversedIdx = allLevels.length === 1 ? 0 : (allLevels.length - 1 - idx);
+    
+    const curveProgress = allLevels.length === 1 
+      ? 0.5 // Center single level
+      : reversedIdx / (allLevels.length - 1); // Distribute from 0 to 1, but reversed
+    
+    const targetY = startY + (curveProgress * usableHeight);
+
+    let closest = curvePoints[0];
+    let minDist = Math.abs(curvePoints[0].y - targetY);
+
+    for (const pt of curvePoints) {
+      const d = Math.abs(pt.y - targetY);
+      if (d < minDist) {
+        minDist = d;
+        closest = pt;
+      }
+    }
+    return closest;
+  }, [allLevels.length, curvePoints, CURVE_HEIGHT, CURVE_WIDTH]);
+
+  const levelPositions = React.useMemo(() => 
+    allLevels.map((_, i) => getLevelPositionOnCurve(i)), 
+    [allLevels, getLevelPositionOnCurve]
   );
 
-  const handleTabSelect = (idx: number) => {
-    setSelectedTab(idx);
-    // Consistent navigation logic
-    if (idx === 0) {
-      router.push('/StatsPage');
-    } else if (idx === 1) {
-      // Already on HomeScreen, no navigation needed
-      return;
-    } else if (idx === 2) {
-      router.push('/CommunityPage');
+  // Calculate initial scroll position based on whether this is first load or returning from navigation
+  const initialScrollY = React.useMemo(() => {
+    if (isFirstLoad.current && !isReturningFromNavigation) {
+      // True first load: start at bottom for reveal effect
+      console.log('First load - starting at bottom:', CURVE_HEIGHT + height * 1.5 - height);
+      return CURVE_HEIGHT + height * 1.5 - height;
+    } else {
+      // Returning from navigation: use saved position
+      console.log('Returning from navigation - using saved position:', savedScrollPosition.current);
+      return savedScrollPosition.current;
     }
+  }, [CURVE_HEIGHT, height, isReturningFromNavigation]);
+
+  // Helper to scroll to the current level
+  const scrollToCurrentLevel = React.useCallback(() => {
+    if (!levelPositions.length || !goal?.current_level) return;
+    
+    // Use validatedLevel (1-based) to find the current accessible level
+    const [validatedLevel] = goal.current_level.split('_').map(Number);
+    
+    // Find the index in allLevels array (0-based) that matches the validatedLevel (1-based)
+    const lvlIdx = allLevels.findIndex(lvl => lvl.level_number === validatedLevel);
+    
+    if (lvlIdx === -1) {
+      console.log(`Level ${validatedLevel} not found in allLevels array`);
+      return;
+    }
+    
+    console.log(`Scrolling to level ${validatedLevel} at array index ${lvlIdx}`);
+    console.log(`Level positions length: ${levelPositions.length}`);
+    console.log(`All levels:`, allLevels.map(l => l.level_number));
+    
+    // IMPORTANT: The levelPositions array uses the same order as allLevels array
+    // So we use lvlIdx directly (no need to reverse it again)
+    const { y } = levelPositions[lvlIdx];
+    
+    console.log(`Position for level ${validatedLevel}: y=${y}`);
+    
+    // Center the level in the viewport, accounting for the marginTop offset
+    const scrollY = Math.max(0, y + height * 0.5 - height / 2);
+    
+    console.log(`Final scroll position: ${scrollY}`);
+    
+    // Use slower animation (2 seconds instead of default)
+    scrollViewRef.current?.scrollTo({ y: scrollY, animated: true });
+    
+    // Save the position after scrolling
+    savedScrollPosition.current = scrollY;
+    
+  }, [levelPositions, goal, allLevels, height]);
+
+  // Handle scroll position management and initial load
+  useEffect(() => {
+    if (levelPositions.length && goal?.current_level) {
+      if (isFirstLoad.current && !isReturningFromNavigation) {
+        // Only auto-scroll on true first load
+        console.log('First load - will scroll to current level after delay');
+        const timer = setTimeout(() => {
+          scrollToCurrentLevel();
+          isFirstLoad.current = false;
+        }, 600);
+        return () => clearTimeout(timer);
+      } else if (isReturningFromNavigation) {
+        // Returning from navigation: just restore position without animation
+        console.log('Returning from navigation - restoring position:', savedScrollPosition.current);
+        const timer = setTimeout(() => {
+          if (scrollViewRef.current) {
+            scrollViewRef.current.scrollTo({ 
+              y: savedScrollPosition.current, 
+              animated: false // No animation when returning
+            });
+          }
+          setIsReturningFromNavigation(false);
+        }, 50); // Reduced timeout
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [scrollToCurrentLevel, levelPositions, goal, isReturningFromNavigation]);
+
+  // Parse current_level from Supabase (e.g., '1_1' for first level/first subquest, 1-based)
+  const [validatedLevel, validatedSubquest] = React.useMemo(() => {
+    if (!goal?.current_level) return [1, 1];
+    const [lvl, sq] = goal.current_level.split('_').map(Number);
+    return [lvl ?? 1, sq ?? 1];
+  }, [goal]);
+
+  const handleValidateSubquest = async (levelIdx: number, subquestIdx: number) => {
+    const levelNum = levelIdx + 1;
+    const subquestNum = subquestIdx + 1;
+    // Only allow validating the current subquest
+    if (levelNum !== validatedLevel || subquestNum !== validatedSubquest) return;
+    let newCurrentLevel;
+    const level = allLevels[levelIdx];
+    if (level && subquestNum < level.sub_quests.length) {
+      // Move to next subquest in the same level
+      newCurrentLevel = `${levelNum}_${subquestNum + 1}`;
+    } else {
+      // If last subquest, increment subquest value by 1 (to enable level validation)
+      newCurrentLevel = `${levelNum}_${subquestNum + 1}`;
+    }
+    await supabase.from('goals').update({ current_level: newCurrentLevel }).eq('id', goal.id);
+    const updatedGoal = await fetchLatestGoalForUser();
+    setGoal(updatedGoal);
+    setSelectedLevelData(allLevels[levelIdx]);
+    
+    // Scroll to the newly current level when validating
+    setTimeout(() => {
+      scrollToCurrentLevel();
+      // Update saved position after scrolling
+      setTimeout(() => {
+        const [validatedLevel] = (updatedGoal?.current_level || '1_1').split('_').map(Number);
+        const lvlIdx = allLevels.findIndex(lvl => lvl.level_number === validatedLevel);
+        if (lvlIdx !== -1) {
+          const { y } = levelPositions[lvlIdx];
+          savedScrollPosition.current = y + height * 0.5 - height / 2;
+        }
+      }, 700);
+    }, 300);
+  };
+
+  // Handler to validate a level (when all subquests are validated, 1-based)
+  const handleValidateLevel = async (levelIdx: number) => {
+    const levelNum = levelIdx + 1;
+    const level = allLevels[levelIdx];
+    if (!level || !level.sub_quests || validatedLevel !== levelNum || validatedSubquest <= level.sub_quests.length) return;
+    
+    // Move to next level, first subquest (reset subquest to 1)
+    const newCurrentLevel = `${levelNum + 1}_1`;
+    await supabase.from('goals').update({ current_level: newCurrentLevel }).eq('id', goal.id);
+    const updatedGoal = await fetchLatestGoalForUser();
+    setGoal(updatedGoal);
+    
+    // Close the current level modal
+    setSelectedLevelData(null);
+    setLevelModalVisible(false);
+    
+    // Show the level unlocked banner
+    setLevelUnlockedBanner(true);
+    setTimeout(() => setLevelUnlockedBanner(false), 2000);
+    
+    // Scroll to the newly unlocked level
+    setTimeout(() => {
+      scrollToCurrentLevel();
+    }, 300);
+  };
+
+  /* -------------------------- HANDLERS ------------------------------------ */
+  const handleTabSelect = (idx: number) => {
+    // Save current scroll position BEFORE changing selectedTab
+    console.log('Saving scroll position before navigation:', currentScrollPosition.current);
+    savedScrollPosition.current = currentScrollPosition.current;
+    
+    setSelectedTab(idx);
+    
+    if (idx === 0) router.push('/StatsPage');
+    if (idx === 2) router.push('/CommunityPage');
+  };
+
+  const handleLevelPress = (levelIndex: number) => {
+    const level = allLevels[levelIndex];
+    setSelectedLevelData(level);
+    setLevelModalVisible(true);
   };
 
   const handleGoalSubmit = async () => {
     setLoading(true);
     try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
       const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook/Question_Creation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -201,17 +363,16 @@ export default function HomeScreen() {
         throw e;
       }
       console.log('Parsed webhook data:', data);
-      // Parse the questions from the webhook response
       const parsed = JSON.parse(data[0].text);
       console.log('Parsed questions:', parsed);
       setQuestions((parsed.questions as any[]).map((q: any) => q.question));
       setAnswers(Array((parsed.questions as any[]).length).fill(''));
       setCurrentQuestion(0);
       setQuestionsModalVisible(true);
-      setHasGoal(true);
+      setHasGoals(true);
       setWaitingQuestions(false);
       setGoalInput('');
-      setLastGoal(goalInput); // Save the goal for later submission
+      setLastGoal(goalInput);
     } catch (e) {
       Alert.alert('Erreur', "Impossible d'envoyer l'objectif. Veuillez réessayer.");
     } finally {
@@ -220,19 +381,21 @@ export default function HomeScreen() {
     }
   };
 
-  // Affichage conditionnel
+  /* ----------------------------- RENDER ----------------------------------- */
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0A1B2B', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#F48B6C" />
+        <ActivityIndicator size="large" color={ORANGE} />
       </View>
     );
   }
 
-  // Affichage principal avec fond et nav bar toujours visibles
+  /* ------------------------------ UI -------------------------------------- */
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      {/* --------------------------- MODALS --------------------------------- */}
       <Modal
         visible={modalVisible}
         transparent
@@ -262,6 +425,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
       {/* Confirmation Modal */}
       <Modal
         visible={confirmVisible}
@@ -288,6 +452,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
       {/* Questions Modal */}
       <Modal
         visible={questionsModalVisible}
@@ -322,27 +487,35 @@ export default function HomeScreen() {
               <View style={{ width: 16 }} />
               <TouchableOpacity
                 style={styles.modalButton}
-                onPress={() => {
+                onPress={async () => {
                   if (currentQuestion < questions.length - 1) {
                     setCurrentQuestion(currentQuestion + 1);
                   } else {
                     setQuestionsModalVisible(false);
-                    // Send answers and goal to Level_Creation webhook
-                    fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/Level_Creation', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
+                    try {
+                      const { data: userData } = await supabase.auth.getUser();
+                      const user = userData?.user;
+                      const payload = {
                         goal: lastGoal,
                         responses: Object.fromEntries(questions.map((q, i) => [q, answers[i]])),
-                      }),
-                    })
-                      .then(res => res.text())
-                      .then(resText => {
-                        console.log('Level_Creation webhook response:', resText);
-                      })
-                      .catch(err => {
-                        console.log('Level_Creation webhook error:', err);
-                      });
+                        user_id: user?.id || null,
+                      };
+                      
+                      await Promise.all([
+                        fetch('https://n8n.srv777212.hstgr.cloud/webhook/Level_Creation', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                        }),
+                        fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/Level_Creation', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                        }),
+                      ]);
+                    } catch (err) {
+                      console.log('Level_Creation webhook error:', err);
+                    }
                   }
                 }}
               >
@@ -354,45 +527,238 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-      <ImageBackground
-        source={require('../assets/images/Untitled.png')}
-        style={styles.container}
-        resizeMode="cover"
-      >
-        <View style={styles.content}>
 
+      {/* Level Details Modal - NEW CENTERED MODAL */}
+      <Modal
+        visible={levelModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLevelModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.levelModalCard}>
+            <View style={styles.levelModalHeader}>
+              <Text style={styles.levelModalTitle}>
+                Niveau {selectedLevelData?.level_number || '?'}
+              </Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setLevelModalVisible(false)}
+              >
+                <Ionicons name="close" size={24} color="#3A5A6A" />
+              </TouchableOpacity>
+            </View>
+            
+            {selectedLevelData && (
+              <ScrollView style={styles.levelModalContent} showsVerticalScrollIndicator={false}>
+                <Text style={styles.levelTitle}>{selectedLevelData.title}</Text>
+                <Text style={styles.levelSummary}>{selectedLevelData.summary}</Text>
+                
+                {selectedLevelData.sub_quests && selectedLevelData.sub_quests.length > 0 && (
+                  <View style={styles.subQuestsContainer}>
+                    <Text style={styles.subQuestsTitle}>Sous-quêtes :</Text>
+                    {selectedLevelData.sub_quests.map((sq: any, idx: number) => {
+                      const levelNum = selectedLevelData.level_number;
+                      // Only subquests with idx+1 < validatedSubquest are validated
+                      const isValidated = levelNum < validatedLevel || (levelNum === validatedLevel && idx + 1 < validatedSubquest);
+                      return (
+                        <View key={idx} style={[styles.subQuestCard, isValidated && { backgroundColor: '#D4F5E9', borderLeftColor: '#71ABA4' }]}> 
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={[styles.subQuestTitle, isValidated && { color: '#71ABA4' }]}>{sq.title}</Text>
+                            {isValidated && <Ionicons name="checkmark-circle" size={22} color="#71ABA4" />}
+                          </View>
+                          <Text style={styles.subQuestInstructions}>{sq.instructions}</Text>
+                          {!isValidated && (
+                            <TouchableOpacity style={[styles.levelModalButton, { marginTop: 10, paddingVertical: 8 }]} onPress={() => handleValidateSubquest(selectedLevelData.level_number - 1, idx)}>
+                              <Text style={styles.levelModalButtonText}>Valider</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+                {/* Validation condition for the level */}
+                {selectedLevelData.validation && (
+                  <View style={styles.validationContainer}>
+                    <Text style={styles.validationTitle}>Condition de validation :</Text>
+                    <Text style={styles.validationDescription}>{selectedLevelData.validation.description}</Text>
+                  </View>
+                )}
+                {/* Validation button for the level */}
+                {selectedLevelData.sub_quests && selectedLevelData.sub_quests.length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.levelModalButton, { marginTop: 16, backgroundColor: (selectedLevelData.level_number < validatedLevel || (selectedLevelData.level_number === validatedLevel && validatedSubquest > selectedLevelData.sub_quests.length)) ? ORANGE : '#ccc' }]}
+                    disabled={!(selectedLevelData.level_number < validatedLevel || (selectedLevelData.level_number === validatedLevel && validatedSubquest > selectedLevelData.sub_quests.length))}
+                    onPress={() => handleValidateLevel(selectedLevelData.level_number - 1)}
+                  >
+                    <Text style={styles.levelModalButtonText}>Valider le niveau</Text>
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+            )}
+            
+          </View>
+        </View>
+      </Modal>
+
+      <ImageBackground source={require('../assets/images/Untitled.png')} style={styles.container} resizeMode="cover">
+        {/* Banner for unlocked level */}
+        {levelUnlockedBanner && (
+          <View style={{ position: 'absolute', top: 40, left: 0, right: 0, zIndex: 100, alignItems: 'center' }}>
+            <View style={{ backgroundColor: ORANGE, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 32, shadowColor: ORANGE, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 }}>
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>Nouveau niveau débloqué !</Text>
+            </View>
+          </View>
+        )}
+        <View style={styles.content}>
           {hasGoals === false ? (
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            /* ----------------------- Pas de quête => QuestBox --------------- */
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View style={{ flex: 1 }}>
                 <AnimatedQuestBox />
               </View>
             </TouchableWithoutFeedback>
-
           ) : (
-            <AnimatedScrollView
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              scrollEventThrottle={16}
-              onScroll={handleScroll}
-            >
-              <View style={styles.curveContainer}>
-                <Svg width={CURVE_WIDTH} height={CURVE_HEIGHT} style={{ position: 'absolute' }}>
-                  <Path d={path} stroke={ORANGE} strokeWidth={3} fill="none" />
-                </Svg>
-                {levels.map((level, i) => (
-                  <LevelCircle
-                    key={i}
-                    y={level.y}
-                    number={level.number}
-                    isSelected={i === selected}
-                    onPress={() => setSelected(i)}
-                  />
-                ))}
-              </View>
-            </AnimatedScrollView>
+            /* ------------------------- Vue avec courbe + niveaux ------------ */
+            <View style={{ flex: 1 }}>
+              <AnimatedScrollView
+                ref={scrollViewRef}
+                style={styles.scrollView}
+                contentContainerStyle={{ height: CURVE_HEIGHT + height * 1.5 }}
+                showsVerticalScrollIndicator={false}
+                scrollEventThrottle={16}
+                contentOffset={{ x: 0, y: initialScrollY }} // Start position based on state
+                onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+      useNativeDriver: false,
+      listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+                    const yOffset = e.nativeEvent.contentOffset.y;
+                    
+                    // Update current scroll position in real time
+                    currentScrollPosition.current = yOffset;
+                    
+        let minDist = Infinity;
+        let minIdx = 0;
+                    for (let i = 0; i < allLevels.length; i++) {
+                      // Adjust for the marginTop offset when calculating distances
+                      const lvlY = (levelPositions[i]?.y || 0) + height * 0.5;
+                      const dist = Math.abs(lvlY - yOffset - height / 2);
+          if (dist < minDist) {
+            minDist = dist;
+            minIdx = i;
+          }
+        }
+                    setExpandedLevel(minIdx);
+                  },
+                })}
+              >
+                {/* ------------ Conteneur qui SCROLLE avec la courbe ------------ */}
+                <View style={{ width: CURVE_WIDTH, height: CURVE_HEIGHT, marginTop: height * 0.5 }}>
+                  {/* Courbe SVG (scrolle puisque dans le même conteneur) */}
+                  <Svg
+                    width={CURVE_WIDTH}
+                    height={CURVE_HEIGHT}
+                    style={{ position: 'absolute', top: 0, left: 0 }}
+                  >
+                    <Path
+                      d={curvePath}
+                      stroke={ORANGE}
+                      strokeWidth={4}
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </Svg>
+
+                  {/* --------------------------- Cercles niveaux --------------- */}
+                  {allLevels.map((level, i) => {
+                    const { x, y } = levelPositions[i] || { x: CURVE_WIDTH / 2, y: CURVE_HEIGHT / 2 };
+                    const selected = expandedLevel === i;
+                    const levelNum = level.level_number;
+                    // Only levels with levelNum < validatedLevel are completed
+                    const isCompleted = levelNum < validatedLevel;
+                    // Only the current level is accessible
+                    const isCurrent = levelNum === validatedLevel;
+                    const isAccessible = isCompleted || isCurrent;
+                    return (
+                      <View
+                        key={i}
+                        style={{
+                          position: 'absolute',
+                          left: x - (selected ? EXPANDED_RADIUS : CIRCLE_RADIUS),
+                          top: y - (selected ? EXPANDED_RADIUS : CIRCLE_RADIUS),
+                          width: (selected ? EXPANDED_RADIUS : CIRCLE_RADIUS) * 2,
+                          height: (selected ? EXPANDED_RADIUS : CIRCLE_RADIUS) * 2,
+                          borderRadius: 999,
+                          backgroundColor: isCompleted ? ORANGE : isAccessible ? (selected ? '#fff' : '#71ABA4') : '#D3D3D3',
+                          zIndex: selected ? 2 : 1,
+                          borderWidth: selected ? 3 : 2,
+                          borderColor: selected ? ORANGE : 'rgba(255,255,255,0.3)',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          elevation: selected ? 8 : 3,
+                          shadowColor: '#000',
+                          shadowOpacity: selected ? 0.25 : 0.1,
+                          shadowRadius: selected ? 10 : 4,
+                          shadowOffset: { width: 0, height: selected ? 4 : 2 },
+                        }}
+                      >
+                        {isAccessible ? (
+                          <TouchableOpacity
+                            style={{ flex: 1, width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
+                            activeOpacity={0.85}
+                            onPress={() => handleLevelPress(i)}
+                          >
+                            {selected ? (
+                              <>
+                                <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', marginBottom: 8 }}>
+                                  {`Niveau ${level.level_number || i + 1}`}
+                                </Text>
+                                <View
+                                  style={{
+                                    marginTop: 6,
+                                    width: 38,
+                                    height: 38,
+                                    borderRadius: 19,
+                                    backgroundColor: ORANGE,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 2,
+                                    borderColor: '#fff',
+                                    shadowColor: ORANGE,
+                                    shadowOpacity: 0.3,
+                                    shadowRadius: 4,
+                                    elevation: 3,
+                                  }}
+                                >
+                                  <Text style={{ color: '#fff', fontSize: 28, fontWeight: 'bold' }}>+</Text>
+                                </View>
+                              </>
+                            ) : (
+                              <Text style={{ color: isCompleted ? '#fff' : '#3A5A6A', fontSize: 20, fontWeight: 'bold' }}>
+                                {level.level_number || i + 1}
+                              </Text>
+                            )}
+                            {isCompleted && !selected && (
+                              <Ionicons name="checkmark-circle" size={28} color="#fff" style={{ marginTop: 4 }} />
+                            )}
+                          </TouchableOpacity>
+                        ) : (
+                          <View style={{ flex: 1, width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', opacity: 0.6 }}>
+                            <Ionicons name="lock-closed" size={28} color="#888" style={{ marginBottom: 4 }} />
+                            <Text style={{ color: '#888', fontSize: 18, fontWeight: 'bold' }}>{level.level_number || i + 1}</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </AnimatedScrollView>
+            </View>
           )}
         </View>
+
+        {/* ------------------------------- NAVBAR ----------------------------- */}
         <BottomNavBar selectedIndex={selectedTab} onSelect={handleTabSelect} />
       </ImageBackground>
     </>
@@ -417,14 +783,12 @@ function AnimatedQuestBox() {
 
   const handleLaunch = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Animation de disparition de la première box
     Animated.timing(anim, {
       toValue: 0,
       duration: 300,
       useNativeDriver: true,
     }).start(() => {
       setStep('input');
-      // Animation d'apparition de la deuxième box
       Animated.timing(inputAnim, {
         toValue: 1,
         duration: 300,
@@ -441,7 +805,6 @@ function AnimatedQuestBox() {
   const confirmSend = async () => {
     setShowConfirmModal(false);
     setLoading(true);
-    // Animation de rotation
     Animated.loop(
       Animated.timing(rotateAnim, {
         toValue: 1,
@@ -451,31 +814,6 @@ function AnimatedQuestBox() {
       })
     ).start();
     try {
-      // Récupérer l'utilisateur connecté
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      console.log('Tentative d\'insertion dans goals :', { user_id: user?.id, titre: goalInput, statut: 'nouveau' });
-      // Insérer l'objectif dans la table goals
-      if (user && user.id) {
-        const { error: insertError } = await supabase
-          .from('goals')
-          .insert({
-            user_id: user.id,
-            titre: goalInput,
-            statut: 'nouveau',
-          });
-        if (insertError) {
-          console.log('Erreur insertion goals :', insertError);
-          alert("Erreur lors de l'enregistrement de l'objectif dans la base : " + insertError.message);
-          setLoading(false);
-          rotateAnim.stopAnimation();
-          rotateAnim.setValue(0);
-          return;
-        } else {
-          console.log('Insertion goals réussie !');
-          alert('Objectif enregistré dans la base !');
-        }
-      }
       const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook/Question_Creation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -483,11 +821,9 @@ function AnimatedQuestBox() {
       });
       const isOk = response.ok;
       response.json().then(jsonArr => {
-        // DEBUG : afficher la réponse brute
         console.log('Réponse n8n:', jsonArr);
-        // Pop-up de confirmation objectif
         alert('Votre objectif est bien : ' + goalInput);
-        setTimeout(() => {
+        setTimeout(async () => {
           try {
             const textObj = JSON.parse(jsonArr[0].text);
             const qList = textObj.questions.map((q: any) => q.question);
@@ -496,12 +832,18 @@ function AnimatedQuestBox() {
             setAnswers([]);
             setInputValue('');
             setStep('questions');
+            setLoading(false);
+            rotateAnim.stopAnimation();
+            rotateAnim.setValue(0);
             Animated.timing(questionsAnim, {
               toValue: 1,
               duration: 350,
               useNativeDriver: true,
             }).start();
           } catch (err) {
+            setLoading(false);
+            rotateAnim.stopAnimation();
+            rotateAnim.setValue(0);
             alert("Erreur lors de la lecture des questions.");
           }
         }, 1000);
@@ -518,7 +860,7 @@ function AnimatedQuestBox() {
     setShowConfirmModal(false);
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const newAnswers = [...answers];
     newAnswers[currentQuestion] = inputValue;
@@ -527,7 +869,35 @@ function AnimatedQuestBox() {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
     } else {
-      alert('Merci, toutes les réponses ont été envoyées !');
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData?.user;
+        const responsesObj = Object.fromEntries(questions.map((q, i) => [q, newAnswers[i]]));
+        const payload = {
+          goal: goalInput,
+          responses: responsesObj,
+          user_id: user?.id || null,
+        };
+        
+        await Promise.all([
+          fetch('https://n8n.srv777212.hstgr.cloud/webhook/Level_Creation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }),
+          fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/Level_Creation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }),
+        ]);
+        
+        alert('Merci, toutes les réponses ont été envoyées !');
+        // Optionally refresh the page or navigate
+        window.location.reload();
+      } catch (err) {
+        alert("Erreur lors de l'envoi des réponses.");
+      }
     }
   };
 
@@ -547,10 +917,10 @@ function AnimatedQuestBox() {
           }}
         >
           <Text style={{ color: '#71ABA4', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 12 }}>
-            Tu n’as pas encore de quête…
+            Tu n&apos;as pas encore de quête…
           </Text>
           <Text style={{ color: '#71ABA4', fontSize: 17, textAlign: 'center', marginBottom: 28 }}>
-            Et si tu en lançais une aujourd’hui ?
+            Et si tu en lançais une aujourd&apos;hui ?
           </Text>
           <TouchableOpacity
             style={{
@@ -656,7 +1026,6 @@ function AnimatedQuestBox() {
               />
             </TouchableOpacity>
           </Animated.View>
-          {/* Modal de confirmation custom */}
           <Modal
             visible={showConfirmModal}
             transparent
@@ -704,7 +1073,6 @@ function AnimatedQuestBox() {
             position: 'absolute',
           }}
         >
-          {/* Barre de progression */}
           <View style={{ width: '100%', height: 6, backgroundColor: '#E6E6E6', borderRadius: 3, marginBottom: 24, overflow: 'hidden' }}>
             <Animated.View
               style={{
@@ -760,12 +1128,40 @@ function AnimatedQuestBox() {
             activeOpacity={0.85}
             onPress={handleNext}
           >
-            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>{currentQuestion === questions.length - 1 ? 'Terminer' : 'Next'}</Text>
+            <Text style={{ fontSize: 18, color: '#fff', fontWeight: 'bold' }}>
+              {currentQuestion === questions.length - 1 ? 'Terminer' : 'Suivant'}
+            </Text>
           </TouchableOpacity>
         </Animated.View>
       )}
     </View>
   );
+}
+
+async function fetchLatestGoalForUser() {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData?.user) {
+    console.log('User not found or error:', userError);
+    return null;
+  }
+  const userId = userData.user.id;
+
+  const { data, error } = await supabase
+    .from('goals')
+    .select('id, titre, levels, current_level')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.log('Supabase fetch error:', error);
+    return null;
+  }
+  if (data && data.length > 0) {
+    const goal = data[0];
+    return goal;
+  }
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -780,114 +1176,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  scrollContent: {
-    height: CURVE_HEIGHT + height,
-  },
-  curveContainer: {
-    width: CURVE_WIDTH,
-    height: CURVE_HEIGHT,
-    position: 'absolute',
-  },
-  levelCircle: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowOffset: { width: 0, height: 2 },
-    borderRadius: 100,
-    overflow: 'visible',
-  },
-  plusCircle: {
-    marginTop: 8,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: ORANGE,
-    shadowColor: ORANGE,
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  taskListPlaceholder: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  bottomBar: {
-    flexDirection: 'row',
-    backgroundColor: ORANGE,
-    height: 64,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 24,
-  },
-  navIcon: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconImage: {
-    width: 36,
-    height: 36,
-    tintColor: undefined,
-  },
-  iconText: {
-    fontSize: 32,
-    color: '#fff',
-    opacity: 0.9,
-  },
-  noGoalCard: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    padding: 20,
-    borderRadius: 10,
-    margin: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  noGoalText: {
-    fontSize: 20,
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 15,
-  },
-  plusButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: ORANGE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  plusButtonText: {
-    fontSize: 36,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  createGoalText: {
-    fontSize: 18,
-    color: ORANGE,
-    textDecorationLine: 'underline',
   },
   modalOverlay: {
     flex: 1,
@@ -949,5 +1237,122 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
     fontWeight: '500',
+  },
+  // New styles for the level modal
+  levelModalCard: {
+    width: '90%',
+    height: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  levelModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E6E6E6',
+  },
+  levelModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: ORANGE,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F7F7F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  levelModalContent: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  levelTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#3A5A6A',
+    marginBottom: 12,
+  },
+  levelSummary: {
+    fontSize: 16,
+    color: '#71ABA4',
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  subQuestsContainer: {
+    marginBottom: 20,
+  },
+  subQuestsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#3A5A6A',
+    marginBottom: 12,
+  },
+  subQuestCard: {
+    backgroundColor: '#F7FAF9',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: ORANGE,
+  },
+  subQuestTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: ORANGE,
+    marginBottom: 8,
+  },
+  subQuestInstructions: {
+    fontSize: 14,
+    color: '#3A5A6A',
+    lineHeight: 20,
+  },
+  validationContainer: {
+    backgroundColor: '#E8F5F3',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  validationTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#71ABA4',
+    marginBottom: 8,
+  },
+  validationDescription: {
+    fontSize: 14,
+    color: '#3A5A6A',
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
+  levelModalButton: {
+    backgroundColor: ORANGE,
+    borderRadius: 16,
+    paddingVertical: 16,
+    marginHorizontal: 24,
+    marginBottom: 24,
+    alignItems: 'center',
+    shadowColor: ORANGE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  levelModalButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
