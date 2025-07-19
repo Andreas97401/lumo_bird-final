@@ -32,14 +32,14 @@ const DUMMY_FRIENDS = [
     id: 'a4897d45-b7a0-4dbf-a094-db2b7e7e7e7e',
     name: 'Andreas',
     status: 'pending',
-    from: 'other', // simulons que c’est une demande reçue
+    from: 'other', // simulons que c'est une demande reçue
     to: 'me',
   },
   {
     id: 'dfa8aaf3-89d9-4134-8caf-a374f1e7e7e7',
     name: 'Raphaël',
     status: 'pending',
-    from: 'me', // simulons que c’est une demande envoyée
+    from: 'me', // simulons que c'est une demande envoyée
     to: 'other',
   },
 ];
@@ -88,7 +88,7 @@ export default function CommunityPage() {
   const [userSuggestions, setUserSuggestions] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
-  // 1. Ajouter un état d’opacité pour chaque toast de carte
+  // 1. Ajouter un état d'opacité pour chaque toast de carte
   const [toastOpacityByCard, setToastOpacityByCard] = useState<{ [id: string]: Animated.Value }>({});
   // 1. Ajouter un objet de refs pour stocker les timeouts par carte
   const toastTimeoutsRef = useRef<{ [id: string]: number }>({});
@@ -96,6 +96,9 @@ export default function CommunityPage() {
   // const [globalCooldown, setGlobalCooldown] = useState(false); // Supprimé
 
   const [userProfiles, setUserProfiles] = useState<Record<string, string>>({}); // id utilisateur -> prenom
+
+  // Pour garder le nom affiché lors du passage de pending à accepted
+  const [pendingNames, setPendingNames] = useState<Record<string, string>>({});
 
   // Fonction pour charger les profils des utilisateurs concernés
   async function fetchUserProfiles(friendRequests: any[]) {
@@ -128,7 +131,7 @@ export default function CommunityPage() {
     fetchUserId();
   }, []);
 
-  // Fonction pour charger les demandes d’amis depuis Supabase
+  // Fonction pour charger les demandes d'amis depuis Supabase
   async function fetchFriendRequests() {
     if (!currentUserId) return;
     const { data, error } = await supabase
@@ -150,7 +153,16 @@ export default function CommunityPage() {
     }
   }, [currentUserId]);
 
-  // Fonction pour envoyer une demande d’ami
+  // Auto-refresh toutes les 10 secondes
+  useEffect(() => {
+    if (!currentUserId) return;
+    const interval = setInterval(() => {
+      fetchFriendRequests();
+    }, 10000); // 10 secondes
+    return () => clearInterval(interval);
+  }, [currentUserId]);
+
+  // Fonction pour envoyer une demande d'ami
   async function sendFriendRequest(toUserId: string) {
     if (!currentUserId || !toUserId) return false;
     const { data, error } = await supabase
@@ -184,7 +196,24 @@ export default function CommunityPage() {
     if (success) {
       setAddFriendValue('');
       setUserSuggestions([]);
-      fetchFriendRequests();
+      // On mémorise le nom utilisé pour la demande
+      setPendingNames(prev => ({ ...prev, [user.id]: user.prenom }));
+      await fetchFriendRequests();
+      // On anime uniquement la dernière carte ajoutée (l'ami le plus récent)
+      if (friends.length > 0) {
+        // On cherche l'ami le plus récent (celui qui n'a pas encore d'animation)
+        const lastFriend = friends[friends.length - 1];
+        if (lastFriend && !cardAnim[lastFriend.id]) {
+          const anim = new Animated.Value(0);
+          setCardAnim(prev => ({ ...prev, [lastFriend.id]: anim }));
+          Animated.spring(anim, {
+            toValue: 1,
+            friction: 8,
+            tension: 40,
+            useNativeDriver: true,
+          }).start();
+        }
+      }
     }
   };
 
@@ -246,8 +275,16 @@ export default function CommunityPage() {
         return;
       }
       setIsSearching(true);
-      // Exclure les amis déjà ajoutés + soi-même
-      const excludeIds = friends.map(f => f.id).concat(currentUserId);
+      // Exclure les amis déjà ajoutés, les demandes en attente, et soi-même
+      const excludeIds = [
+        ...friends
+          .filter(f => (
+            (f.from_user === currentUserId || f.to_user === currentUserId) &&
+            (f.status === 'pending' || f.status === 'accepted')
+          ))
+          .map(f => (f.from_user === currentUserId ? f.to_user : f.from_user)),
+        currentUserId
+      ];
       const results = await searchUsersByPseudoOrEmail(addFriendValue, excludeIds);
       if (active) setUserSuggestions(results);
       setIsSearching(false);
@@ -256,6 +293,9 @@ export default function CommunityPage() {
     return () => { active = false; };
   }, [addFriendValue, friends, currentUserId]);
 
+  // Animation d'apparition uniquement lors de l'ajout d'un ami
+  const [cardAnim, setCardAnim] = useState<Record<string, Animated.Value>>({});
+
   // Fonctions dummy
   const handleShowProfile = (friend: any) => {
     // router.push(`/profile/${friend.id}`)
@@ -263,13 +303,55 @@ export default function CommunityPage() {
   const handleViewGroup = (group: any) => {
     // router.push(`/group/${group.id}`)
   };
+  // État pour la modale de création de groupe
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupGoal, setGroupGoal] = useState('');
+
+  // Désactivé : le bouton 'Créer un groupe' ne fait plus rien
   const handleCreateGroup = () => {
-    setShowCreateGroup(false);
-    setCreateType(null);
-    setNewGroupName('');
-    setNewProjectGoal('');
-    setRoles([{ name: '', user: '' }]);
+    setShowGroupModal(true);
   };
+
+  const handleCloseGroupModal = () => {
+    setShowGroupModal(false);
+    setGroupName('');
+    setGroupGoal('');
+  };
+
+  // Confirmation après création de groupe
+  const [showGroupConfirmation, setShowGroupConfirmation] = useState(false);
+  const [lastGroupName, setLastGroupName] = useState('');
+  const [lastGroupGoal, setLastGroupGoal] = useState('');
+
+  const handleValidateGroup = () => {
+    setLastGroupName(groupName);
+    setLastGroupGoal(groupGoal);
+    handleCloseGroupModal();
+    setShowGroupConfirmation(true);
+  };
+
+  const handleCloseGroupConfirmation = async () => {
+    try {
+      const payload = {
+        name: lastGroupName,
+        goal: lastGroupGoal,
+      };
+      console.log('[GROUPE] Envoi des données :', payload);
+      const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/bfdcac3f-9df9-4580-9137-b879a5bfcf1a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const text = await response.text();
+      console.log('[GROUPE] Réponse serveur :', text);
+    } catch (e) {
+      console.log('[GROUPE] Erreur lors de l\'envoi :', e);
+      alert('Erreur lors de l\'envoi des données.');
+    }
+    setShowGroupConfirmation(false);
+  };
+
   const handleTabSelect = (idx: number) => {
     setSelectedTab(idx);
     if (idx === 0) router.push('/StatsPage');
@@ -325,7 +407,7 @@ export default function CommunityPage() {
           )}
           <Text style={styles.sectionSubtitle}>Retrouve ici tous tes amis et motive-les !</Text>
           {friends.length === 0 ? (
-            <Text style={styles.emptyText}>Aucun ami pour l’instant</Text>
+            <Text style={styles.emptyText}>Aucun ami pour l'instant</Text>
           ) : (
             <FlatList
               data={friends}
@@ -336,18 +418,32 @@ export default function CommunityPage() {
                 const isAccepted = item.status === 'accepted';
                 const isPendingSent = isPending && item.from_user === currentUserId;
                 const isPendingReceived = isPending && item.to_user === currentUserId;
-                // Pour le nom, il faudrait idéalement faire un join sur les users, ici on affiche l’id pour l’exemple
-                const friendName = isPendingSent
-                  ? userProfiles[item.to_user] || item.to_user
-                  : userProfiles[item.from_user] || item.from_user;
+                // On garde le nom du pending si on l'a mémorisé
+                let friendName = '';
+                if (isPendingSent) {
+                  friendName = userProfiles[item.to_user] ? userProfiles[item.to_user] : '';
+                } else if (isPendingReceived) {
+                  friendName = userProfiles[item.from_user] ? userProfiles[item.from_user] : '';
+                } else if (isAccepted) {
+                  // Si c'est accepté, on regarde si on a mémorisé le nom lors du pending
+                  const otherId = item.from_user === currentUserId ? item.to_user : item.from_user;
+                  friendName = pendingNames[otherId] || userProfiles[otherId] || otherId;
+                }
                 const scale = popAnim[item.id] || new Animated.Value(1);
                 return (
-                  <Animated.View style={{ transform: [{ scale }] }}>
+                  <Animated.View
+                    style={{
+                      transform: [
+                        { scale: cardAnim[item.id] ? cardAnim[item.id].interpolate({ inputRange: [0, 0.5, 0.85, 1], outputRange: [0.7, 1.08, 0.97, 1] }) : 1 },
+                      ],
+                      opacity: cardAnim[item.id] ? cardAnim[item.id] : 1,
+                    }}
+                  >
                     {isPendingReceived && (
                       <View style={styles.friendCardPending}>
                         <Ionicons name="person-circle" size={38} color="#B0B8C1" style={styles.avatar} accessibilityLabel="Avatar ami" />
                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                          <Text style={styles.friendName}>{friendName}</Text>
+                          <Text style={styles.friendName}>{friendName || 'Ami'}</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8, gap: 8 }}>
                           <TouchableOpacity
@@ -371,7 +467,7 @@ export default function CommunityPage() {
                       <View style={styles.friendCardPending}>
                         <Ionicons name="person-circle" size={38} color="#B0B8C1" style={styles.avatar} accessibilityLabel="Avatar ami" />
                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                          <Text style={styles.friendName}>{friendName}</Text>
+                          <Text style={styles.friendName}>{friendName || 'Ami'}</Text>
             </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
                           <Ionicons name="time-outline" size={32} color="#F48B5A" accessibilityLabel="En attente de validation" />
@@ -387,14 +483,14 @@ export default function CommunityPage() {
                             flexDirection: 'row',
                             alignItems: 'center',
                             maxWidth: '50%',
-                            // SUPPRIMER l’opacité conditionnelle ici
+                            // SUPPRIMER l'opacité conditionnelle ici
                             // opacity: (cooldownNotif[`${item.id}-notif`] || cooldownMotivate[`${item.id}-motivate`] || cooldownWake[`${item.id}-wake`]) ? 0.4 : 1,
                           }}
                           accessibilityLabel="Ouvrir le profil"
                         >
                           <Ionicons name="person-circle" size={38} color="#B0B8C1" style={styles.avatar} accessibilityLabel="Avatar ami" />
                           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                            <Text style={styles.friendName}>{friendName}</Text>
+                            <Text style={styles.friendName}>{friendName || 'Ami'}</Text>
               </View>
                           </Pressable>
                           <View style={{ width: '50%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
@@ -543,7 +639,7 @@ export default function CommunityPage() {
               </View>
           <Text style={styles.sectionSubtitle}>Rejoins ou crée un projet commun pour progresser ensemble !</Text>
           {myGroups.filter(g => g.type !== 'Groupe personnel').length === 0 ? (
-            <Text style={styles.emptyText}>Aucun groupe pour l’instant</Text>
+            <Text style={styles.emptyText}>Aucun groupe pour l'instant</Text>
           ) : (
             <FlatList
               data={myGroups.filter(g => g.type !== 'Groupe personnel')}
@@ -563,7 +659,7 @@ export default function CommunityPage() {
               scrollEnabled={false}
             />
           )}
-          <TouchableOpacity style={styles.createGroupBtn} onPress={() => setShowCreateGroup(true)} accessibilityLabel="Créer un projet commun">
+          <TouchableOpacity style={styles.createGroupBtn} onPress={handleCreateGroup} accessibilityLabel="Créer un projet commun">
             <Ionicons name="add-circle" size={22} color="#fff" style={{ marginRight: 6 }} />
             <Text style={styles.createGroupBtnText}>Créer un groupe</Text>
           </TouchableOpacity>
@@ -796,6 +892,20 @@ export default function CommunityPage() {
     }
   }, [showFriendModal]);
 
+  // Fonction pour supprimer un ami
+  async function deleteFriend(requestId: string) {
+    const { error } = await supabase
+      .from('friend_requests')
+      .delete()
+      .eq('id', requestId);
+    if (error) {
+      console.error('Erreur lors de la suppression de l\'ami:', error);
+      return;
+    }
+    setShowFriendModal(false);
+    fetchFriendRequests();
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Header */}
@@ -922,9 +1032,9 @@ export default function CommunityPage() {
                 </Animated.View>
             </View>
           </View>
-          <TouchableOpacity style={styles.friendModalDeleteBtn} accessibilityLabel="Supprimer l'ami">
+          <TouchableOpacity style={styles.friendModalDeleteBtn} accessibilityLabel="Supprimer l'ami" onPress={() => selectedFriend && deleteFriend(selectedFriend.id)}>
             <Ionicons name="trash-outline" size={20} color="#fff" />
-            <Text style={styles.friendModalDeleteText}>Supprimer l’ami</Text>
+            <Text style={styles.friendModalDeleteText}>Supprimer l'ami</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.friendModalCloseBtn} onPress={() => setShowFriendModal(false)} accessibilityLabel="Fermer">
             <Text style={styles.friendModalCloseText}>Fermer</Text>
@@ -948,6 +1058,68 @@ export default function CommunityPage() {
       </View>
       )}
       <BottomNavBar selectedIndex={selectedTab} onSelect={handleTabSelect} />
+
+      {/* Modal de création de groupe */}
+      {showGroupModal && (
+        <View style={[styles.friendModalOverlay, { backgroundColor: 'rgba(20,38,58,0.98)' }]} pointerEvents="box-none">
+          <Animated.View style={styles.groupModalBox} pointerEvents="auto"> 
+            <Text style={styles.groupModalTitle}>Créer un groupe</Text>
+            <TextInput
+              style={styles.groupModalInput}
+              placeholder="Nom du groupe"
+              placeholderTextColor="#B0B8C1"
+              value={groupName}
+              onChangeText={setGroupName}
+              accessibilityLabel="Nom du groupe"
+              autoFocus={true}
+            />
+            <TextInput
+              style={styles.groupModalInput}
+              placeholder="Objectif du groupe"
+              placeholderTextColor="#B0B8C1"
+              value={groupGoal}
+              onChangeText={setGroupGoal}
+              accessibilityLabel="Objectif du groupe"
+            />
+            <View style={styles.groupModalBtnRow}>
+              <TouchableOpacity style={styles.groupModalValidateBtn} onPress={handleValidateGroup} accessibilityLabel="Valider le groupe">
+                <Text style={styles.groupModalValidateText}>Valider</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.groupModalCancelBtn} onPress={handleCloseGroupModal} accessibilityLabel="Annuler">
+                <Text style={styles.groupModalCancelText}>Annuler</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </View>
+      )}
+
+      {/* Pop-up de confirmation après création de groupe */}
+      {showGroupConfirmation && (
+        <View style={[styles.friendModalOverlay, { backgroundColor: 'rgba(20,38,58,0.98)' }]} pointerEvents="box-none">
+          <Animated.View style={styles.groupModalBox} pointerEvents="auto"> 
+            <Text style={styles.groupModalTitle}>Confirmation</Text>
+            <Text style={{ color: '#fff', fontSize: 17, marginBottom: 10, textAlign: 'center', fontFamily: 'Righteous' }}>
+              <Text style={{ color: '#FD8B5A' }}>Nom :</Text> {lastGroupName || '-'}
+            </Text>
+            <Text style={{ color: '#fff', fontSize: 17, marginBottom: 18, textAlign: 'center', fontFamily: 'Righteous' }}>
+              <Text style={{ color: '#FD8B5A' }}>Objectif :</Text> {lastGroupGoal || '-'}
+            </Text>
+            <View style={styles.groupModalBtnRow}>
+              <TouchableOpacity style={styles.groupModalRedBtn} onPress={() => {
+                setShowGroupConfirmation(false);
+                setGroupName(lastGroupName);
+                setGroupGoal(lastGroupGoal);
+                setShowGroupModal(true);
+              }} accessibilityLabel="Retour">
+                <Text style={styles.groupModalRedText}>Retour</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.groupModalGreenBtn} onPress={handleCloseGroupConfirmation} accessibilityLabel="Je confirme">
+                <Text style={styles.groupModalGreenText}>Je confirme</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -1016,7 +1188,7 @@ const styles = StyleSheet.create({
   friendCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#14263A',
+    backgroundColor: '#223B54', // était #14263A, devient #223B54
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
@@ -1029,11 +1201,11 @@ const styles = StyleSheet.create({
   friendCardPending: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#223B54',
+    backgroundColor: '#14263A', // était #223B54, devient #14263A
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
-    opacity: 0.6,
+    // opacity: 0.6, // laissé commenté
   },
   avatar: {
     fontSize: 32,
@@ -1598,5 +1770,128 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  // --- Styles épurés pour la modale de groupe ---
+  groupModalBox: {
+    backgroundColor: '#223B54',
+    borderRadius: 28,
+    padding: 24,
+    width: '90%',
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    alignItems: 'center',
+  },
+  groupModalTitle: {
+    fontFamily: 'Righteous',
+    fontSize: 24,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 18,
+    letterSpacing: 0.5,
+  },
+  groupModalInput: {
+    backgroundColor: '#14263A',
+    borderRadius: 14,
+    color: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+    fontSize: 16,
+    width: '100%',
+    fontFamily: 'SpaceMono-Regular',
+  },
+  groupModalBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+    marginTop: 10,
+    width: '100%',
+  },
+  groupModalValidateBtn: {
+    backgroundColor: '#FD8B5A',
+    borderRadius: 12,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 4,
+  },
+  groupModalValidateText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    fontFamily: 'Righteous',
+    textAlign: 'center',
+  },
+  groupModalCancelBtn: {
+    backgroundColor: '#14263A',
+    borderRadius: 12,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    alignItems: 'center',
+    flex: 1,
+    marginLeft: 4,
+  },
+  groupModalCancelText: {
+    color: '#FD8B5A',
+    fontWeight: 'bold',
+    fontSize: 16,
+    fontFamily: 'Righteous',
+    textAlign: 'center',
+  },
+  groupModalCloseBtn: {
+    backgroundColor: '#FD8B5A',
+    borderRadius: 22,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 10,
+    minWidth: 120,
+  },
+  groupModalCloseText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    fontFamily: 'Righteous',
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+  groupModalRedBtn: {
+    backgroundColor: '#F44336',
+    borderRadius: 22,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    alignItems: 'center',
+    alignSelf: 'center',
+    minWidth: 120,
+  },
+  groupModalRedText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    fontFamily: 'Righteous',
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+  groupModalGreenBtn: {
+    backgroundColor: '#71ABA4',
+    borderRadius: 22,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    alignItems: 'center',
+    alignSelf: 'center',
+    minWidth: 120,
+    marginLeft: 8,
+  },
+  groupModalGreenText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    fontFamily: 'Righteous',
+    textAlign: 'center',
+    letterSpacing: 0.2,
   },
 }); 
