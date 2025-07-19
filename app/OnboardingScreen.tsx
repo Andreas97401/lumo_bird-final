@@ -23,33 +23,33 @@ export default function OnboardingScreen() {
   const buttonScale = useRef(new Animated.Value(1)).current;
   const { t } = useTranslation();
 
-  // Je déplace la déclaration de SLIDES ici, après le hook
+  // Remplace les SLIDES par des textes statiques en français
   const SLIDES = [
     {
       key: 'community',
-      image: require('../assets/images/Users_Group.png'),
-      title: t('onboarding.community_title'),
-      subtitle: t('onboarding.community_subtitle'),
+      image: require('../assets/images/Community.png'),
+      title: 'Découvre la communauté',
+      subtitle: 'Partage tes progrès, motive tes amis et avance ensemble !',
       animation: 'fadeInRight',
-      button: t('onboarding.next'),
+      button: 'Suivant',
       bg: ['#0A1B2B', '#7BA9A3'],
     },
     {
       key: 'analytics',
-      image: require('../assets/images/Chart_Line.png'),
-      title: t('onboarding.analytics_title'),
-      subtitle: t('onboarding.analytics_subtitle'),
+      image: require('../assets/images/Analytics.png'),
+      title: 'Analyse tes stats',
+      subtitle: 'Suis ta progression, débloque des badges et bats tes records !',
       animation: 'fadeInUp',
-      button: t('onboarding.next'),
+      button: 'Suivant',
       bg: ['#7BA9A3', '#F48B6C'],
     },
     {
       key: 'goals',
-      image: require('../assets/images/alternate1.png'),
-      title: '', // sera personnalisé dynamiquement
-      subtitle: t('onboarding.goals_subtitle'),
+      image: require('../assets/images/Goals.png'),
+      title: userName ? `Bienvenue ${userName} !` : 'Bienvenue !',
+      subtitle: 'Fixe-toi un objectif et commence ton aventure Lumo Bird.',
       animation: 'zoomIn',
-      button: t('onboarding.create_goal'),
+      button: 'Créer mon objectif',
       bg: ['#F48B6C', '#0A1B2B'],
     },
   ];
@@ -271,7 +271,7 @@ export default function OnboardingScreen() {
                 />
                 <Text style={styles.title} accessibilityRole="header">
                   {idx === 2
-                    ? t('onboarding.welcome')
+                    ? 'Bienvenue !'
                     : slide.title}
                 </Text>
                 <Text style={styles.subtitle} accessibilityRole="text">

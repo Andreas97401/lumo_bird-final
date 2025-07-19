@@ -1,4 +1,4 @@
-import { createUser } from '@/lib/supabase';
+import { createUser, supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,11 +35,19 @@ export default function RegisterScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const { t } = useTranslation();
 
+  // Ajoute la fonction de validation de pseudo
+  function isValidPseudo(pseudo: string) {
+    return /^[a-zA-Z0-9_-]{3,20}$/.test(pseudo);
+  }
+
   // Validation des champs
   const validateField = (name: string, value: string) => {
     switch (name) {
       case 'prenom':
-        return value.length < 2 ? t('signup.firstname_min') : '';
+        if (!isValidPseudo(value)) {
+          return t('signup.firstname_format') || 'Le pseudo doit contenir 3 à 20 caractères, lettres, chiffres, tirets ou underscores.';
+        }
+        return '';
       case 'age':
         return isNaN(Number(value)) || value === '' ? t('signup.age_number') : '';
       case 'email':
@@ -117,7 +125,37 @@ export default function RegisterScreen() {
 
   const handleSubmit = async () => {
     if (!isButtonEnabled) return;
-    
+
+    // Vérifie unicité du pseudo avant création
+    try {
+      const { data: existing, error: checkError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('prenom', formData.prenom);
+      if (existing && existing.length > 0) {
+        setErrors(prev => ({ ...prev, prenom: t('signup.firstname_taken') || 'Ce pseudo est déjà pris.' }));
+        return;
+      }
+    } catch (e) {
+      Alert.alert(t('signup.error'), t('signup.unknown_error'));
+      return;
+    }
+
+    // Vérifie unicité de l'email avant création
+    try {
+      const { data: existingEmail, error: checkEmailError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('email', formData.email);
+      if (existingEmail && existingEmail.length > 0) {
+        setErrors(prev => ({ ...prev, email: t('signup.email_taken') || 'Cet email est déjà utilisé.' }));
+        return;
+      }
+    } catch (e) {
+      Alert.alert(t('signup.error'), t('signup.unknown_error'));
+      return;
+    }
+
     try {
       const result = await createUser({
         email: formData.email,
@@ -125,12 +163,20 @@ export default function RegisterScreen() {
         prenom: formData.prenom,
         age: parseInt(formData.age),
         genre: formData.genre,
+        first_connection: true,
       });
 
       if (result.success) {
         setShowSuccessModal(true);
       } else {
-        Alert.alert(t('signup.error'), t('signup.create_error', { error: result.error }));
+        // Si erreur d'unicité côté serveur
+        if (result.error && result.error.includes('unique') && result.error.includes('prenom')) {
+          setErrors(prev => ({ ...prev, prenom: t('signup.firstname_taken') || 'Ce pseudo est déjà pris.' }));
+        } else if (result.error && result.error.includes('unique') && result.error.includes('email')) {
+          setErrors(prev => ({ ...prev, email: t('signup.email_taken') || 'Cet email est déjà utilisé.' }));
+        } else {
+          Alert.alert(t('signup.error'), t('signup.create_error', { error: result.error }));
+        }
       }
     } catch (error) {
       Alert.alert(t('signup.error'), t('signup.unknown_error'));
@@ -178,7 +224,15 @@ export default function RegisterScreen() {
                 onChangeText={(value) => handleChange('prenom', value)}
                 value={formData.prenom}
               />
-              {errors.prenom ? <Text style={styles.errorText}>{errors.prenom}</Text> : null}
+              {errors.prenom ? (
+                <Text style={styles.errorText}>
+                  {errors.prenom.startsWith('signup.firstname_format') || errors.prenom.includes('caractères')
+                    ? 'Le pseudo doit contenir 3 à 20 caractères (lettres, chiffres, tirets, underscores).'
+                    : errors.prenom.startsWith('signup.firstname_taken') || errors.prenom.includes('déjà pris')
+                    ? 'Ce pseudo est déjà pris, choisis-en un autre.'
+                    : errors.prenom}
+                </Text>
+              ) : null}
             </View>
 
             {/* Âge et Genre sur la même ligne */}
@@ -219,7 +273,11 @@ export default function RegisterScreen() {
                 onChangeText={(value) => handleChange('email', value)}
                 value={formData.email}
               />
-              {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+              {errors.email ? (
+                <Text style={styles.errorText}>
+                  {errors.email.startsWith('signup.email') ? 'Cet email est déjà utilisé.' : errors.email}
+                </Text>
+              ) : null}
             </View>
 
             {/* Mot de passe */}

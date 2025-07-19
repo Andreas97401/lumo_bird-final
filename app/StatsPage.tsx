@@ -3,15 +3,15 @@ import i18next from 'i18next';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Animated,
-  Easing,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  TouchableOpacity,
-  View,
+    Animated,
+    Easing,
+    Modal,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import BottomNavBar from '../components/BottomNavBar';
 import { SettingsButton } from '../components/SettingsButton';
@@ -227,8 +227,8 @@ export default function StatsPage() {
                 <Text style={{fontSize: stat.label === 'stats.current_difficulty' ? 20 : 28, color:'#FD8B5A', fontWeight:'bold', marginBottom:2}}>
                   {(() => {
                     if (stat.label === 'stats.current_difficulty') {
-                      const key = 'stats.' + (stat.value || '').toLowerCase().trim();
-                      return t(key);
+                      // Affiche toujours 'extrême' sans traduction
+                      return 'extrême';
                     }
                     return stat.value;
                   })()}
