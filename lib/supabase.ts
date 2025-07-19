@@ -23,6 +23,7 @@ export const createUser = async (userData: {
   prenom: string;
   age: number;
   genre: string;
+  first_connection?: boolean;
 }) => {
   try {
     console.log('Début de la création de l\'utilisateur:', { email: userData.email, prenom: userData.prenom });
@@ -75,6 +76,7 @@ export const createUser = async (userData: {
           prenom: userData.prenom,
           age: userData.age,
           genre: userData.genre,
+          first_connection: userData.first_connection ?? true,
         }
       ])
       .select();
@@ -143,4 +145,21 @@ export const signOut = async () => {
       error: error instanceof Error ? error.message : 'Erreur de déconnexion'
     };
   }
+};
+
+// Recherche d'utilisateurs par pseudo ou email (hors amis déjà ajoutés et soi-même)
+export const searchUsersByPseudoOrEmail = async (query: string, excludeIds: string[]): Promise<UserProfile[]> => {
+  if (!query || query.length < 2) return [];
+  let filter = `prenom.ilike.%${query}%,email.ilike.%${query}%`;
+  let req = supabase
+    .from('user_profiles')
+    .select('id, prenom, email, age, genre')
+    .or(filter);
+  if (excludeIds.length > 0) req = req.not('id', 'in', `(${excludeIds.join(',')})`);
+  const { data, error } = await req;
+  if (error) {
+    console.error('Erreur recherche utilisateurs:', error);
+    return [];
+  }
+  return data || [];
 };

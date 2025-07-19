@@ -128,13 +128,13 @@ export default function LoginScreen() {
               <Text style={styles.switchButtonText}>{t('login.no_account')}</Text>
             </TouchableOpacity>
           </Animated.View>
-          <Image
-            source={require('../assets/images/head.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
         </View>
       </KeyboardAvoidingView>
+      <Image
+        source={require('../assets/images/head.png')}
+        style={styles.logoFixed}
+        resizeMode="contain"
+      />
     </SafeAreaView>
   );
 }
@@ -234,5 +234,17 @@ const styles = StyleSheet.create({
     color: 'rgba(198, 231, 226, 0.6)',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  logoFixed: {
+    width: 120,
+    height: 120,
+    position: 'relative',
+    left: 0,
+    right: 500,
+    bottom: 80, // Légèrement au-dessus du bas
+    alignSelf: 'center',
+    tintColor: '#FFFFFF',
+    opacity: 0.8,
+    zIndex: 10,
   },
 }); 
