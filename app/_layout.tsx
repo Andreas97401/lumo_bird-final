@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -28,82 +29,84 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AuthProvider>
-        <Stack
-          screenOptions={{
-            animation: 'none', // Désactive toutes les animations de transition
-            animationTypeForReplace: 'push',
-            // Optimisations pour accélérer le chargement
-            gestureEnabled: false, // Désactive les gestes pour plus de performance
-            gestureDirection: 'horizontal',
-            // Préchargement des écrans
-            presentation: 'card',
-            // Optimisations de performance
-            headerShown: false,
-          }}
-        >
-          <Stack.Screen 
-            name="index" 
-            options={{ 
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <AuthProvider>
+          <Stack
+            screenOptions={{
+              animation: 'none', // Désactive toutes les animations de transition
+              animationTypeForReplace: 'push',
+              // Optimisations pour accélérer le chargement
+              gestureEnabled: false, // Désactive les gestes pour plus de performance
+              gestureDirection: 'horizontal',
+              // Préchargement des écrans
+              presentation: 'card',
+              // Optimisations de performance
               headerShown: false,
-              // Préchargement de la page d'accueil
-              freezeOnBlur: false,
-            }} 
-          />
-          <Stack.Screen 
-            name="LoginScreen" 
-            options={{ 
-              headerShown: false,
-              freezeOnBlur: false,
-            }} 
-          />
-          <Stack.Screen 
-            name="Signup" 
-            options={{ 
-              headerShown: false,
-              freezeOnBlur: false,
-            }} 
-          />
-          <Stack.Screen 
-            name="HomeScreen" 
-            options={{ 
-              headerShown: false,
-              freezeOnBlur: false,
-            }} 
-          />
-          <Stack.Screen 
-            name="CommunityPage" 
-            options={{ 
-              headerShown: false,
-              freezeOnBlur: false,
-            }} 
-          />
-          <Stack.Screen 
-            name="StatsPage" 
-            options={{ 
-              headerShown: false,
-              freezeOnBlur: false,
-            }} 
-          />
-          <Stack.Screen 
-            name="OnboardingScreen" 
-            options={{ 
-              headerShown: false,
-              freezeOnBlur: false,
-            }} 
-          />
-          <Stack.Screen 
-            name="SettingsPage" 
-            options={{ 
-              headerShown: false,
-              freezeOnBlur: false,
-            }} 
-          />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style="auto" />
-      </AuthProvider>
-    </ThemeProvider>
+            }}
+          >
+            <Stack.Screen 
+              name="index" 
+              options={{ 
+                headerShown: false,
+                // Préchargement de la page d'accueil
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="LoginScreen" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="Signup" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="HomeScreen" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="CommunityPage" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="StatsPage" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="OnboardingScreen" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="SettingsPage" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <StatusBar style="auto" />
+        </AuthProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -2,6 +2,7 @@ import { FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   FlatList,
@@ -13,9 +14,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import BottomNavBar from '../components/BottomNavBar';
+import RolesAttributionModal from '../components/RolesAttributionModal';
 import { searchUsersByPseudoOrEmail, supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
@@ -64,6 +66,13 @@ const DUMMY_ALL_FRIENDS = [
   { id: '3', name: 'Clara' },
   { id: '4', name: 'David' },
 ];
+
+// Ajoute l'interface Role
+interface Role {
+  role: string;
+  description: string;
+  tasks: string[];
+}
 
 export default function CommunityPage() {
   // Typage explicite des états
@@ -332,6 +341,7 @@ export default function CommunityPage() {
   };
 
   const handleCloseGroupConfirmation = async () => {
+    setIsLoadingQuestions(true);
     try {
       const payload = {
         name: lastGroupName,
@@ -343,12 +353,37 @@ export default function CommunityPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const text = await response.text();
-      console.log('[GROUPE] Réponse serveur :', text);
+      let data = await response.json();
+      // Si la réponse est une string JSON, on parse
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch (e) {
+          // pas du JSON, on laisse tomber
+        }
+      }
+      console.log('Réponse webhook finale :', data);
+      let questionsArray = [];
+      if (Array.isArray(data) && data.length > 0 && data[0].question) {
+        questionsArray = data.map(q => q.question);
+      } else if (data && Array.isArray(data.questions)) {
+        questionsArray = data.questions;
+      } else if (data && typeof data === 'object' && data.question) {
+        questionsArray = [data.question];
+      }
+      if (questionsArray.length > 0) {
+        setQuestions(questionsArray);
+        setAnswers(Array(questionsArray.length).fill(''));
+        setCurrentQuestionIndex(0);
+        setShowQuestionsModal(true);
+      } else {
+        alert('Erreur: format de réponse inattendu.');
+      }
     } catch (e) {
       console.log('[GROUPE] Erreur lors de l\'envoi :', e);
       alert('Erreur lors de l\'envoi des données.');
     }
+    setIsLoadingQuestions(false);
     setShowGroupConfirmation(false);
   };
 
@@ -906,6 +941,40 @@ export default function CommunityPage() {
     fetchFriendRequests();
   }
 
+  // Ajout des états pour le flow IA
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [showQuestionsModal, setShowQuestionsModal] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [questionInput, setQuestionInput] = useState('');
+
+  const [showRolesModal, setShowRolesModal] = useState(false);
+  const [rolesData, setRolesData] = useState<Role[]>([]);
+
+  // Juste avant le rendu du modal des rôles :
+  // Prépare la vraie liste d'amis acceptés pour le composant
+  const acceptedFriends = friends.filter(f => f.status === 'accepted')
+    .map(f => {
+      // Trouve l'id de l'ami (différent de l'utilisateur connecté)
+      const friendId = f.from_user === currentUserId ? f.to_user : f.from_user;
+      const name = userProfiles[friendId] || 'Ami';
+      // Génère les initiales
+      const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      return { id: friendId, name, initials };
+    });
+
+  // Ajoute l'utilisateur connecté à la liste des membres à assigner
+  let usersForRoles = acceptedFriends;
+  if (currentUserId) {
+    const myName = 'Moi';
+    const myInitials = myName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    usersForRoles = [{ id: currentUserId, name: myName, initials: myInitials }, ...acceptedFriends];
+  }
+
+  // Ajoute un id unique à chaque rôle pour le composant RolesAttributionModal
+  const rolesWithId = rolesData.map((r, idx) => ({ ...r, id: r.role + '_' + idx }));
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Header */}
@@ -1120,8 +1189,198 @@ export default function CommunityPage() {
           </Animated.View>
         </View>
       )}
+
+      {isLoadingQuestions && (
+        <View style={[styles.friendModalOverlay, { backgroundColor: 'rgba(20,38,58,0.98)', zIndex: 9999 }]} pointerEvents="box-none">
+          <View style={[styles.groupModalBox, { alignItems: 'center', justifyContent: 'center' }]}> 
+            <ActivityIndicator size="large" color="#FD8B5A" style={{ marginBottom: 18 }} />
+            <Text style={{ color: '#fff', fontSize: 18, textAlign: 'center', fontFamily: 'Righteous' }}>
+              Génération des questions en cours...
+            </Text>
+          </View>
+        </View>
+      )}
+      {showQuestionsModal && (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,38,58,0.92)', zIndex: 9999 }} pointerEvents="box-none">
+          <View style={{ backgroundColor: '#223B54', borderRadius: 32, padding: 32, minWidth: 320, maxWidth: 420, width: '90%', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8, position: 'relative' }}>
+            {/* Flèche retour en haut à gauche */}
+            {currentQuestionIndex > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  setCurrentQuestionIndex(idx => idx - 1);
+                  setQuestionInput(answers[currentQuestionIndex - 1] || '');
+                }}
+                style={{ position: 'absolute', top: 18, left: 18, padding: 8, zIndex: 10 }}
+                accessibilityLabel="Retour à la question précédente"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="chevron-back" size={28} color="#FD8B5A" />
+              </TouchableOpacity>
+            )}
+            {/* Compteur centré */}
+            <Text style={{ color: '#FD8B5A', fontSize: 16, fontFamily: 'Righteous', marginBottom: 10, alignSelf: 'center', letterSpacing: 0.5 }}>
+              Question {currentQuestionIndex + 1} / {questions.length}
+            </Text>
+            {currentQuestionIndex < questions.length ? (
+              <>
+                <Text style={{ color: '#fff', fontSize: 22, fontFamily: 'Righteous', marginBottom: 28, textAlign: 'center', lineHeight: 32, paddingHorizontal: 6 }}>
+                  {questions[currentQuestionIndex]}
+                </Text>
+                <TextInput
+                  style={{ backgroundColor: '#14263A', borderRadius: 16, color: '#fff', paddingHorizontal: 18, paddingVertical: 14, marginBottom: 28, fontSize: 17, width: '100%', fontFamily: 'SpaceMono-Regular', borderWidth: 1, borderColor: '#223B54' }}
+                  placeholder="Pour répondre"
+                  placeholderTextColor="#B0B8C1"
+                  value={questionInput}
+                  onChangeText={setQuestionInput}
+                  accessibilityLabel="Réponse à la question"
+                  autoFocus
+                />
+                <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', gap: 14 }}>
+                  {/* Plus de bouton Retour ici, seulement Next */}
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#FD8B5A', borderRadius: 16, paddingVertical: 14, alignItems: 'center', flex: 1, marginLeft: 0, shadowColor: '#000', shadowOpacity: 0.10, shadowRadius: 6, elevation: 2 }}
+                    onPress={() => {
+                      const newAnswers = [...answers];
+                      newAnswers[currentQuestionIndex] = questionInput;
+                      setAnswers(newAnswers);
+                      setQuestionInput('');
+                      setCurrentQuestionIndex(idx => idx + 1);
+                    }}
+                    accessibilityLabel="Question suivante"
+                    disabled={questionInput.trim() === ''}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 17, fontFamily: 'Righteous' }}>Next</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <FinalStep
+                lastGroupName={lastGroupName}
+                lastGroupGoal={lastGroupGoal}
+                questions={questions}
+                answers={answers}
+                setShowQuestionsModal={setShowQuestionsModal}
+                setRolesData={setRolesData}
+                setShowRolesModal={setShowRolesModal}
+              />
+            )}
+          </View>
+        </View>
+      )}
+      {showRolesModal && (
+        <RolesAttributionModal
+          visible={showRolesModal}
+          roles={rolesWithId}
+          users={usersForRoles}
+          onClose={() => setShowRolesModal(false)}
+        />
+      )}
     </SafeAreaView>
   );
+}
+
+// Modifie la signature de FinalStep
+interface FinalStepProps {
+  lastGroupName: string;
+  lastGroupGoal: string;
+  questions: string[];
+  answers: string[];
+  setShowQuestionsModal: (show: boolean) => void;
+  setRolesData: (roles: Role[]) => void;
+  setShowRolesModal: (show: boolean) => void;
+}
+
+function FinalStep({ lastGroupName, lastGroupGoal, questions, answers, setShowQuestionsModal, setRolesData, setShowRolesModal }: FinalStepProps) {
+  const [sending, setSending] = useState(false);
+  const [waitingRoles, setWaitingRoles] = useState(false);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
+
+  useEffect(() => {
+    async function sendToWebhook() {
+      setSending(true);
+      setError('');
+      try {
+        let userId = null;
+        try {
+          const { data: userData } = await supabase.auth.getUser();
+          userId = userData?.user?.id || null;
+        } catch {}
+        const payload = {
+          groupName: lastGroupName,
+          groupGoal: lastGroupGoal,
+          questions,
+          answers,
+          userId,
+        };
+        const resp = await fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/roles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) throw new Error('Erreur lors de l\'envoi');
+        setSending(false);
+        setWaitingRoles(true);
+        // Attend la réponse du webhook (rôles)
+        const data = await resp.json();
+        console.log('[WEBHOOK ROLES] Réponse N8n reçue (brute) :', data);
+        let rolesArray: Role[] = [];
+        if (
+          Array.isArray(data) &&
+          data.length > 0 &&
+          typeof data[0].output === 'string'
+        ) {
+          // On enlève les balises ```json et ```
+          let jsonStr = data[0].output.trim();
+          jsonStr = jsonStr.replace(/^```json/, '').replace(/```$/, '').trim();
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (Array.isArray(parsed) && parsed[0].role) {
+              rolesArray = parsed;
+            }
+          } catch (e) {
+            console.log('[WEBHOOK ROLES] Erreur de parsing JSON :', e, jsonStr);
+          }
+        } else if (Array.isArray(data) && data.length > 0 && data[0].role) {
+          rolesArray = data;
+        } else if (data && Array.isArray(data.roles) && data.roles.length > 0 && data.roles[0].role) {
+          rolesArray = data.roles;
+        }
+        if (rolesArray.length > 0) {
+          console.log('[WEBHOOK ROLES] Rôles extraits :', rolesArray);
+          setRolesData(rolesArray);
+          setShowRolesModal(true);
+          console.log('[WEBHOOK ROLES] Ouverture du modal rôles');
+        } else {
+          alert('Aucun rôle à afficher. Format reçu : ' + JSON.stringify(data));
+        }
+        setWaitingRoles(false);
+        setSent(true);
+      } catch (e) {
+        setError("Erreur lors de l'envoi des réponses. Veuillez réessayer.");
+        setSending(false);
+        setWaitingRoles(false);
+      }
+    }
+    sendToWebhook();
+  }, [lastGroupName, lastGroupGoal, questions, answers, setRolesData, setShowRolesModal]);
+
+  if (sending) {
+    return <Text style={{ color: '#fff', fontSize: 18, fontFamily: 'Righteous', marginBottom: 24, textAlign: 'center', lineHeight: 32 }}>Envoi de vos réponses...</Text>;
+  }
+  if (waitingRoles) {
+    return <>
+      <ActivityIndicator size="large" color="#FD8B5A" style={{ marginBottom: 18 }} />
+      <Text style={{ color: '#fff', fontSize: 18, fontFamily: 'Righteous', marginBottom: 24, textAlign: 'center', lineHeight: 32 }}>Récupération des rôles...</Text>
+    </>;
+  }
+  if (error) {
+    return <Text style={{ color: '#FD8B5A', fontSize: 18, fontFamily: 'Righteous', marginBottom: 24, textAlign: 'center', lineHeight: 32 }}>{error}</Text>;
+  }
+  if (sent) {
+    return null;
+  }
+  return null;
 }
 
 const styles = StyleSheet.create({
