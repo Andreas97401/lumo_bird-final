@@ -14,7 +14,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  ScrollView
 } from 'react-native';
 import BottomNavBar from '../components/BottomNavBar';
 import RolesAttributionModal from '../components/RolesAttributionModal';
@@ -74,10 +75,18 @@ interface Role {
   tasks: string[];
 }
 
+interface Group {
+  id: string;
+  name: string;
+  goal: string;
+  admin_id: string;
+  created_at: string;
+}
+
 export default function CommunityPage() {
   // Typage explicite des états
   const [friends, setFriends] = useState<any[]>([]); // sera rempli par Supabase
-  const [myGroups, setMyGroups] = useState(DUMMY_GROUPS);
+  const [myGroups, setMyGroups] = useState<any[]>([]);
   const [addFriendValue, setAddFriendValue] = useState('');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [createType, setCreateType] = useState<'personnel' | 'projet' | null>(null);
@@ -128,6 +137,42 @@ export default function CommunityPage() {
     setUserProfiles(mapping);
   }
 
+  // Fonction pour récupérer les groupes
+  const fetchMyGroups = async () => {
+    if (!currentUserId) return;
+    
+    // Récupérer tous les groupes où l'utilisateur est membre
+    const { data: groupMembers, error: memberError } = await supabase
+      .from('group_members')
+      .select('group_id')
+      .eq('user_id', currentUserId);
+
+    if (memberError) {
+      console.error('Erreur lors de la récupération des membres:', memberError);
+      return;
+    }
+
+    const groupIds = groupMembers?.map(gm => gm.group_id) || [];
+    
+    if (groupIds.length === 0) {
+      setMyGroups([]);
+      return;
+    }
+
+    // Récupérer les détails des groupes
+    const { data: groups, error: groupError } = await supabase
+      .from('groups')
+      .select('*')
+      .in('id', groupIds);
+
+    if (groupError) {
+      console.error('Erreur lors de la récupération des groupes:', groupError);
+      return;
+    }
+
+    setMyGroups(groups || []);
+  };
+
   // Récupère dynamiquement l'id utilisateur connecté
   useEffect(() => {
     const fetchUserId = async () => {
@@ -159,6 +204,7 @@ export default function CommunityPage() {
   useEffect(() => {
     if (currentUserId) {
       fetchFriendRequests();
+      fetchMyGroups();
     }
   }, [currentUserId]);
 
@@ -170,6 +216,69 @@ export default function CommunityPage() {
     }, 10000); // 10 secondes
     return () => clearInterval(interval);
   }, [currentUserId]);
+
+  // Fonction pour gérer l'envoi des invitations
+  const handleSendInvitations = async (assignments: Record<string, string[]>) => {
+    try {
+      // 1. Créer le groupe
+      const { data: groupData, error: groupError } = await supabase
+        .from('groups')
+        .insert([{
+          name: lastGroupName,
+          goal: lastGroupGoal,
+          admin_id: currentUserId
+        }])
+        .select('id')
+        .single();
+
+      if (groupError) throw groupError;
+      if (!groupData) throw new Error('Aucun ID de groupe retourné');
+
+      const groupId = groupData.id;
+
+      // 2. Ajouter l'admin comme membre du groupe
+      const memberInserts = [{
+        group_id: groupId,
+        user_id: currentUserId,
+        role: 'admin',
+        invitation_status: 'accepted'  // L'admin est automatiquement accepté
+      }];
+
+      // 3. Ajouter les autres membres avec leurs rôles
+      for (const [roleId, userIds] of Object.entries(assignments)) {
+        const roleName = rolesWithId.find(r => r.id === roleId)?.role || 'member';
+        
+        for (const userId of userIds) {
+          if (userId !== currentUserId) { // Ne pas réinviter l'admin
+            memberInserts.push({
+              group_id: groupId,
+              user_id: userId,
+              role: roleName,
+              invitation_status: 'pending'
+            });
+          }
+        }
+      }
+
+      // 4. Insérer tous les membres
+      const { error: membersError } = await supabase
+        .from('group_members')
+        .insert(memberInserts);
+
+      if (membersError) throw membersError;
+      
+      // 5. Fermer la modale et montrer un message de succès
+      setShowRolesModal(false);
+      setToast('Groupe créé et invitations envoyées avec succès !');
+
+      // 6. Rafraîchir la liste des groupes
+      await fetchMyGroups();
+
+    } catch (error) {
+      console.error('Erreur lors de la création du groupe et l\'envoi des invitations :', error);
+      setToast('Erreur lors de la création du groupe');
+    }
+  };
 
   // Fonction pour envoyer une demande d'ami
   async function sendFriendRequest(toUserId: string) {
@@ -310,7 +419,8 @@ export default function CommunityPage() {
     // router.push(`/profile/${friend.id}`)
   };
   const handleViewGroup = (group: any) => {
-    // router.push(`/group/${group.id}`)
+    setSelectedGroup(group);
+    setShowGroupDetailsModal(true);
   };
   // État pour la modale de création de groupe
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -346,6 +456,7 @@ export default function CommunityPage() {
       const payload = {
         name: lastGroupName,
         goal: lastGroupGoal,
+        admin_id: currentUserId, // Ajout de l'ID de l'admin (utilisateur connecté)
       };
       console.log('[GROUPE] Envoi des données :', payload);
       const response = await fetch('https://n8n.srv777212.hstgr.cloud/webhook-test/bfdcac3f-9df9-4580-9137-b879a5bfcf1a', {
@@ -673,17 +784,17 @@ export default function CommunityPage() {
             <Text style={styles.sectionTitle}>Groupes</Text>
               </View>
           <Text style={styles.sectionSubtitle}>Rejoins ou crée un projet commun pour progresser ensemble !</Text>
-          {myGroups.filter(g => g.type !== 'Groupe personnel').length === 0 ? (
+          {myGroups.length === 0 ? (
             <Text style={styles.emptyText}>Aucun groupe pour l'instant</Text>
           ) : (
             <FlatList
-              data={myGroups.filter(g => g.type !== 'Groupe personnel')}
+              data={myGroups}
               keyExtractor={item => item.id}
               renderItem={({ item }) => (
                 <View style={styles.groupCard}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.groupName}>{item.name}</Text>
-                    <Text style={styles.groupType}>{item.type}</Text>
+                    <Text style={styles.groupType}>{item.goal}</Text>
                 </View>
                   <Pressable style={({ pressed }) => [styles.groupBtn, pressed && styles.btnPressed]} onPress={() => handleViewGroup(item)} accessibilityLabel="Voir le groupe">
                     <Text style={styles.groupBtnText}>Voir</Text>
@@ -951,6 +1062,8 @@ export default function CommunityPage() {
 
   const [showRolesModal, setShowRolesModal] = useState(false);
   const [rolesData, setRolesData] = useState<Role[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [showGroupDetailsModal, setShowGroupDetailsModal] = useState(false);
 
   // Juste avant le rendu du modal des rôles :
   // Prépare la vraie liste d'amis acceptés pour le composant
@@ -1273,7 +1386,43 @@ export default function CommunityPage() {
           roles={rolesWithId}
           users={usersForRoles}
           onClose={() => setShowRolesModal(false)}
+          onSendInvitations={handleSendInvitations}
         />
+      )}
+
+      {/* Modal des détails du groupe */}
+      {showGroupDetailsModal && selectedGroup && (
+        <View style={styles.friendModalOverlay}>
+          <Animated.View 
+            style={[
+              styles.groupModalBox,
+              {
+                transform: [
+                  { scale: modalPopAnim }
+                ]
+              }
+            ]}
+          >
+            <Text style={styles.groupModalTitle}>{selectedGroup.name}</Text>
+            
+            <View style={{ width: '100%', marginBottom: 20 }}>
+              <Text style={[styles.sectionTitle, { color: '#FD8B5A', marginBottom: 8 }]}>Objectif</Text>
+              <Text style={{ color: '#fff', fontSize: 16 }}>{selectedGroup.goal}</Text>
+            </View>
+
+            <View style={{ width: '100%', marginBottom: 20 }}>
+              <Text style={[styles.sectionTitle, { color: '#FD8B5A', marginBottom: 8 }]}>Membres</Text>
+              {/* TODO: Ajouter la liste des membres */}
+            </View>
+
+            <TouchableOpacity 
+              style={styles.friendModalCloseBtn}
+              onPress={() => setShowGroupDetailsModal(false)}
+            >
+              <Text style={styles.friendModalCloseText}>Fermer</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
       )}
     </SafeAreaView>
   );

@@ -41,9 +41,10 @@ interface RolesAttributionModalProps {
   roles: Role[];
   users: User[];
   onClose: () => void;
+  onSendInvitations?: (assignments: Record<string, string[]>) => void;
 }
 
-export default function RolesAttributionModal({ visible, roles, users, onClose }: RolesAttributionModalProps) {
+export default function RolesAttributionModal({ visible, roles, users, onClose, onSendInvitations }: RolesAttributionModalProps) {
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
   const [draggingUser, setDraggingUser] = useState<User | null>(null);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
@@ -52,6 +53,19 @@ export default function RolesAttributionModal({ visible, roles, users, onClose }
   // Ajoute l'état pour le détail du rôle
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const plusRefs = useRef<Record<string, any>>({});
+
+  // Vérifie si tous les rôles ont au moins un membre assigné
+  const allRolesAssigned = roles.every(role => 
+    assignments[role.id] && assignments[role.id].length > 0
+  );
+
+  // Fonction pour envoyer les invitations
+  const handleSendInvitations = () => {
+    if (allRolesAssigned && onSendInvitations) {
+      onSendInvitations(assignments);
+      onClose();
+    }
+  };
 
   // Drag logic
   function handleUserDrag(user: User, e: any) {
@@ -131,6 +145,17 @@ export default function RolesAttributionModal({ visible, roles, users, onClose }
             />
           ))}
         </ScrollView>
+        
+        {/* Bouton d'envoi des invitations */}
+        {allRolesAssigned && (
+          <TouchableOpacity 
+            style={[styles.sendButton]} 
+            onPress={handleSendInvitations}
+          >
+            <Text style={styles.sendButtonText}>Envoyer les invitations</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Membres à assigner */}
         <View style={styles.membersBox}>
           <Text style={styles.membersTitle}>MEMBRES À ASSIGNER ({users.length})</Text>
@@ -277,6 +302,24 @@ const styles = StyleSheet.create({
   headerBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'transparent', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 22, paddingTop: 18, paddingBottom: 10, width: '100%', maxWidth: 600 },
   headerTitle: { fontFamily: 'Righteous', fontSize: 22, color: '#fff', fontWeight: 'bold' },
   headerCloseBtn: { padding: 8, marginLeft: 8 },
+  sendButton: { 
+    backgroundColor: GREEN, 
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignSelf: 'center',
+    marginTop: 16,
+    marginBottom: 20,
+    opacity: 1
+  },
+  sendButtonDisabled: {
+    opacity: 0.5
+  },
+  sendButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16
+  },
   rolesColumn: { flex: 1, width: '100%', marginBottom: 12, backgroundColor: 'transparent' },
   roleCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 22, paddingVertical: 18, paddingHorizontal: 18, marginBottom: 16, width: '92%', alignSelf: 'center', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
   roleIconPastel: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
