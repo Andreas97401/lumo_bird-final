@@ -13,6 +13,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import BottomNavBar from '../components/BottomNavBar';
 import { SettingsButton } from '../components/SettingsButton';
 import { Text } from '../components/Text';
@@ -35,34 +37,42 @@ const LEVELS = [
   { level: 5, name: 'Maître', points: 2000, unlocked: false },
 ];
 
+// Type pour les badges avec icônes MaterialIcons ou MaterialCommunityIcons
+type BadgeIconType = {
+  type: 'MaterialIcons' | 'MaterialCommunityIcons';
+  name: string;
+  color?: string;
+  size?: number;
+};
+
 const BADGES = [
-  { id: 1, name: 'Premier Pas', description: 'Première connexion', unlocked: true, icon: '🌟' },
-  { id: 4, name: 'Social', description: 'Ajouté 3 amis', unlocked: false, icon: '👥' },
-  { id: 5, name: 'Expert', description: 'Niveau 5 atteint', unlocked: false, icon: '🏆' },
-  // 🔵 Badges de difficulté
-  { id: 7, name: 'Le Spartiate', description: 'Objectif complété en “extrême” (Full parcours hard)', unlocked: false, icon: '🏅' },
-  { id: 8, name: "L'Adaptatif", description: '2 changements de difficulté maîtrisés (Switch intelligent)', unlocked: false, icon: '🏅' },
-  { id: 9, name: 'Le Roc', description: 'Aucun abandon d’objectif en 30 jours (Persistance)', unlocked: false, icon: '🏅' },
-  // 🟡 Badges de transformation
-  { id: 10, name: 'Le Groupe Uni', description: 'Créer un groupe où chacun avance vers ses objectifs', unlocked: false, icon: '🏆' },
-  { id: 11, name: 'Le Collectif', description: 'Créer un groupe pour atteindre un objectif commun', unlocked: false, icon: '🏆' },
-  // 🟣 Badges communautaires ou symboliques
-  { id: 13, name: 'Premier envol', description: '1er objectif terminé', unlocked: false, icon: '🌱' },
-  { id: 14, name: 'L’Envergure du Phoenix', description: '100 niveaux cumulés', unlocked: false, icon: '🕊️' },
-  { id: 15, name: 'LumoMaster', description: '5 objectifs réussis dans des domaines différents', unlocked: false, icon: '🎯' },
-  { id: 16, name: 'Le Veilleur de Nuit', description: 'Objectif commencé après 22h', unlocked: false, icon: '✨' },
-  // 🔥 Badges secrets ou cachés
-  { id: 17, name: 'Le Perfectionniste', description: 'Refaire un niveau déjà validé volontairement', unlocked: false, icon: '👀' },
-  { id: 18, name: 'Le Stratège intérieur', description: 'Laisser une note personnelle 7 jours de suite', unlocked: false, icon: '💬' },
-  { id: 19, name: 'Le Faiseur de Quêtes', description: 'Créer un objectif avec un nom original', unlocked: false, icon: '💡' },
+  { id: 1, name: 'Premier Pas', description: 'Première connexion', unlocked: true, icon: { type: 'MaterialIcons', name: 'star', color: '#FFD700', size: 36 } as BadgeIconType },
+  { id: 4, name: 'Social', description: 'Ajouté 3 amis', unlocked: false, icon: { type: 'MaterialIcons', name: 'people', color: '#4682B4', size: 36 } as BadgeIconType },
+  { id: 5, name: 'Expert', description: 'Niveau 5 atteint', unlocked: false, icon: { type: 'MaterialCommunityIcons', name: 'trophy', color: '#FFD700', size: 36 } as BadgeIconType },
+  // Badges de difficulté
+  { id: 7, name: 'Le Spartiate', description: 'Objectif complété en "extrême" (Full parcours hard)', unlocked: false, icon: { type: 'MaterialCommunityIcons', name: 'medal', color: '#C0C0C0', size: 36 } as BadgeIconType },
+  { id: 8, name: "L'Adaptatif", description: '2 changements de difficulté maîtrisés (Switch intelligent)', unlocked: false, icon: { type: 'MaterialCommunityIcons', name: 'medal-outline', color: '#C0C0C0', size: 36 } as BadgeIconType },
+  { id: 9, name: 'Le Roc', description: 'Aucun abandon d\'objectif en 30 jours (Persistance)', unlocked: false, icon: { type: 'MaterialIcons', name: 'shield', color: '#C0C0C0', size: 36 } as BadgeIconType },
+  // Badges de transformation
+  { id: 10, name: 'Le Groupe Uni', description: 'Créer un groupe où chacun avance vers ses objectifs', unlocked: false, icon: { type: 'MaterialCommunityIcons', name: 'trophy-award', color: '#FFD700', size: 36 } as BadgeIconType },
+  { id: 11, name: 'Le Collectif', description: 'Créer un groupe pour atteindre un objectif commun', unlocked: false, icon: { type: 'MaterialCommunityIcons', name: 'trophy-variant', color: '#FFD700', size: 36 } as BadgeIconType },
+  // Badges communautaires ou symboliques
+  { id: 13, name: 'Premier envol', description: '1er objectif terminé', unlocked: false, icon: { type: 'MaterialIcons', name: 'eco', color: '#32CD32', size: 36 } as BadgeIconType },
+  { id: 14, name: 'L\'Envergure du Phoenix', description: '100 niveaux cumulés', unlocked: false, icon: { type: 'MaterialIcons', name: 'flight', color: '#87CEEB', size: 36 } as BadgeIconType },
+  { id: 15, name: 'LumoMaster', description: '5 objectifs réussis dans des domaines différents', unlocked: false, icon: { type: 'MaterialIcons', name: 'track-changes', color: '#FF6347', size: 36 } as BadgeIconType },
+  { id: 16, name: 'Le Veilleur de Nuit', description: 'Objectif commencé après 22h', unlocked: false, icon: { type: 'MaterialIcons', name: 'nights-stay', color: '#9370DB', size: 36 } as BadgeIconType },
+  // Badges secrets ou cachés
+  { id: 17, name: 'Le Perfectionniste', description: 'Refaire un niveau déjà validé volontairement', unlocked: false, icon: { type: 'MaterialIcons', name: 'visibility', color: '#1E90FF', size: 36 } as BadgeIconType },
+  { id: 18, name: 'Le Stratège intérieur', description: 'Laisser une note personnelle 7 jours de suite', unlocked: false, icon: { type: 'MaterialIcons', name: 'chat', color: '#9370DB', size: 36 } as BadgeIconType },
+  { id: 19, name: 'Le Faiseur de Quêtes', description: 'Créer un objectif avec un nom original', unlocked: false, icon: { type: 'MaterialIcons', name: 'lightbulb', color: '#FFA500', size: 36 } as BadgeIconType },
 ];
 
-// Les valeurs doivent être les clés de traduction (français) pour permettre l'affichage multilingue correct
-const KEY_STATS = [
-  { label: 'stats.quest_completed', value: '12', unit: '' },
-  { label: 'stats.levels_done', value: '34', unit: '' },
+// Les valeurs seront mises à jour dynamiquement
+const DEFAULT_KEY_STATS = [
+  { label: 'stats.quest_completed', value: '0', unit: '' },
+  { label: 'stats.levels_done', value: '0', unit: '' },
   { label: 'stats.current_difficulty', value: 'extreme', unit: '' }, // ex: 'facile', 'intermediaire', 'difficile', 'extreme', 'personnalisee'
-  { label: 'stats.objectives_done', value: '7', unit: '' },
+  { label: 'stats.objectives_done', value: '0', unit: '' },
 ];
 
 const TIP_OF_THE_DAY = {
@@ -91,8 +101,11 @@ export default function StatsPage() {
   const [badgeModalVisible, setBadgeModalVisible] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<any>(null);
   const [selectedTab, setSelectedTab] = useState(0); // 0 = Stats
-  const [goal, setGoal] = useState<{ titre: string; progress: number } | null>(null);
+  const [goal, setGoal] = useState<{ titre: string; progress: number; current_level?: string; levels_data?: any } | null>(null); // levels_data contient les données de la colonne 'levels'
   const [loadingGoal, setLoadingGoal] = useState(true);
+  const [completedLevels, setCompletedLevels] = useState(0);
+  const [completedQuests, setCompletedQuests] = useState(0);
+  const [maxLevel, setMaxLevel] = useState(0);
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -136,7 +149,69 @@ export default function StatsPage() {
         if (error || !goals || goals.length === 0) {
           setGoal(null);
         } else {
-          setGoal({ titre: goals[0].titre, progress: 0 }); // Progression à 0 par défaut
+          const currentGoal = goals[0];
+          
+          // Extraire les données de niveaux si elles existent
+          let levelsData = null;
+          try {
+            if (currentGoal.levels && typeof currentGoal.levels === 'string') {
+              levelsData = JSON.parse(currentGoal.levels);
+            } else if (currentGoal.levels) {
+              levelsData = currentGoal.levels;
+            }
+          } catch (e) {
+            console.error('Erreur lors du parsing des données de niveaux:', e);
+          }
+          
+          setGoal({ 
+            titre: currentGoal.titre, 
+            progress: 0, 
+            current_level: currentGoal.current_level,
+            levels_data: levelsData
+          });
+          
+          // Déterminer le niveau maximum à partir des données
+          let maxLevelFound = 0;
+          if (levelsData) {
+            try {
+              // Parcourir les sections pour trouver le niveau le plus élevé
+              levelsData.forEach((section: any) => {
+                if (section.levels && Array.isArray(section.levels)) {
+                  section.levels.forEach((level: any) => {
+                    if (level.level_number && typeof level.level_number === 'number') {
+                      maxLevelFound = Math.max(maxLevelFound, level.level_number);
+                    }
+                  });
+                }
+              });
+            } catch (e) {
+              console.error('Erreur lors de l\'extraction du niveau maximum:', e);
+            }
+          }
+          
+          // Si aucun niveau maximum n'a été trouvé, utiliser une valeur par défaut
+          if (maxLevelFound === 0) {
+            maxLevelFound = 11; // Valeur par défaut
+          }
+          
+          setMaxLevel(maxLevelFound);
+          
+          // Calculer les statistiques basées sur current_level
+          if (currentGoal.current_level) {
+            const levelParts = currentGoal.current_level.split('_');
+            if (levelParts.length === 2) {
+              const currentLevel = parseInt(levelParts[0], 10);
+              if (!isNaN(currentLevel)) {
+                // Niveaux effectués = X - 1 (car current_level correspond au niveau en cours, pas terminé)
+                const levelsCompleted = Math.max(0, currentLevel - 1);
+                setCompletedLevels(levelsCompleted);
+                
+                // Quêtes complétées = (X - 1) × 2
+                const questsCompleted = levelsCompleted * 2;
+                setCompletedQuests(questsCompleted);
+              }
+            }
+          }
         }
       } catch (e) {
         setGoal(null);
@@ -206,9 +281,17 @@ export default function StatsPage() {
                 <Text style={[styles.goalTitle, {textAlign:'center', fontSize:20, marginBottom:10}]}>{goal.titre}</Text>
                 <View style={{width:'90%', alignItems:'center', marginBottom:10}}>
                   <View style={{width:'100%', height:12, backgroundColor:'#E6E6E6', borderRadius:6, overflow:'hidden'}}>
-                    <View style={{height:12, backgroundColor:'#FD8B5A', width:'0%', borderRadius:6}} />
+                    {/* Calcul dynamique de la largeur de la barre de progression */}
+                    <View style={{
+                      height: 12, 
+                      backgroundColor: '#FD8B5A', 
+                      width: `${Math.min(100, (completedLevels / maxLevel) * 100)}%`, 
+                      borderRadius: 6
+                    }} />
                   </View>
-                  <Text style={{color:'#71ABA4', fontWeight:'bold', marginTop:5}}>2 / 5 niveaux</Text>
+                  <Text style={{color:'#71ABA4', fontWeight:'bold', marginTop:5}}>
+                    {completedLevels} / {maxLevel} niveaux
+                  </Text>
                 </View>
               </>
             ) : (
@@ -221,21 +304,29 @@ export default function StatsPage() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('stats.key_stats')}</Text>
           <View style={{flexDirection:'row', flexWrap:'wrap', justifyContent:'space-between', gap:12}}>
-            {KEY_STATS.map((stat, index) => (
-              <View key={index} style={{backgroundColor:'#0A2547', borderRadius:16, padding:18, alignItems:'center', width:'47%', marginBottom:12, borderWidth:1, borderColor:'#1A2F4A', shadowColor:'#000', shadowOpacity:0.08, shadowRadius:4, elevation:2}}>
-                <Text style={{fontSize:13, color:'#71ABA4', textAlign:'center', marginBottom:8}}>{t(stat.label)}</Text>
-                <Text style={{fontSize: stat.label === 'stats.current_difficulty' ? 20 : 28, color:'#FD8B5A', fontWeight:'bold', marginBottom:2}}>
-                  {(() => {
-                    if (stat.label === 'stats.current_difficulty') {
-                      // Affiche toujours 'extrême' sans traduction
-                      return 'extrême';
-                    }
-                    return stat.value;
-                  })()}
-                </Text>
-                <Text style={{fontSize:13, color:'#C6E7E2', marginBottom:2}}>{stat.unit}</Text>
-              </View>
-            ))}
+            {DEFAULT_KEY_STATS.map((stat, index) => {
+              // Déterminer la valeur à afficher en fonction du type de statistique
+              let displayValue = stat.value;
+              
+              if (stat.label === 'stats.quest_completed') {
+                displayValue = completedQuests.toString();
+              } else if (stat.label === 'stats.levels_done') {
+                displayValue = completedLevels.toString();
+              } else if (stat.label === 'stats.current_difficulty') {
+                // Affiche toujours 'extrême' sans traduction
+                displayValue = 'extrême';
+              }
+              
+              return (
+                <View key={index} style={{backgroundColor:'#0A2547', borderRadius:16, padding:18, alignItems:'center', width:'47%', marginBottom:12, borderWidth:1, borderColor:'#1A2F4A', shadowColor:'#000', shadowOpacity:0.08, shadowRadius:4, elevation:2}}>
+                  <Text style={{fontSize:13, color:'#71ABA4', textAlign:'center', marginBottom:8}}>{t(stat.label)}</Text>
+                  <Text style={{fontSize: stat.label === 'stats.current_difficulty' ? 20 : 28, color:'#FD8B5A', fontWeight:'bold', marginBottom:2}}>
+                    {displayValue}
+                  </Text>
+                  <Text style={{fontSize:13, color:'#C6E7E2', marginBottom:2}}>{stat.unit}</Text>
+                </View>
+              );
+            })}
           </View>
         </View>
 
@@ -260,7 +351,23 @@ export default function StatsPage() {
                 onPress={() => handleBadgePress(badge)}
                 activeOpacity={0.8}
               >
-                <Text style={{fontSize:36, marginBottom:6}}>{badge.icon}</Text>
+                {badge.icon && badge.icon.type === 'MaterialIcons' ? (
+                  <MaterialIcons 
+                    name={badge.icon.name as keyof typeof MaterialIcons.glyphMap} 
+                    size={badge.icon.size || 36} 
+                    color={badge.icon.color || '#FFFFFF'} 
+                    style={{marginBottom:6}} 
+                  />
+                ) : badge.icon && badge.icon.type === 'MaterialCommunityIcons' ? (
+                  <MaterialCommunityIcons 
+                    name={badge.icon.name as keyof typeof MaterialCommunityIcons.glyphMap} 
+                    size={badge.icon.size || 36} 
+                    color={badge.icon.color || '#FFFFFF'} 
+                    style={{marginBottom:6}} 
+                  />
+                ) : (
+                  <Text style={{fontSize:36, marginBottom:6}}>🏆</Text>
+                )}
                 <Text style={{fontSize:15, color:'#C6E7E2', fontWeight:'bold', textAlign:'center', marginBottom:2}} numberOfLines={1} ellipsizeMode="tail">{t('stats.badge_' + badgeKey(badge.name), {defaultValue: badge.name})}</Text>
                 {/* La description n'est plus affichée ici */}
               </TouchableOpacity>
@@ -271,7 +378,7 @@ export default function StatsPage() {
         {/* Conseil du jour ergonomique */}
         <View style={styles.section}>
           <View style={{backgroundColor:'#FD8B5A', borderRadius:16, padding:20, alignItems:'center', marginBottom:8, flexDirection:'row', gap:12}}>
-            <Text style={{fontSize:28, marginRight:10}}>💡</Text>
+            <MaterialIcons name="lightbulb" size={28} color="#FFFFFF" style={{marginRight:10}} />
             <View style={{flex:1}}>
               <Text style={{color:'#fff', fontWeight:'bold', fontSize:16, marginBottom:4}}>{TIP_OF_THE_DAY.title}</Text>
               <Text style={{color:'#fff', fontSize:14}}>{TIP_OF_THE_DAY.content}</Text>
@@ -299,7 +406,23 @@ export default function StatsPage() {
           <View style={styles.modalContent}>
             {selectedBadge && (
               <>
-                <Text style={styles.modalBadgeIcon}>{selectedBadge.icon}</Text>
+                <View style={styles.modalBadgeIconContainer}>
+                  {selectedBadge.icon && selectedBadge.icon.type === 'MaterialIcons' ? (
+                    <MaterialIcons 
+                      name={selectedBadge.icon.name as keyof typeof MaterialIcons.glyphMap} 
+                      size={selectedBadge.icon.size || 60} 
+                      color={selectedBadge.icon.color || '#FFFFFF'} 
+                    />
+                  ) : selectedBadge.icon && selectedBadge.icon.type === 'MaterialCommunityIcons' ? (
+                    <MaterialCommunityIcons 
+                      name={selectedBadge.icon.name as keyof typeof MaterialCommunityIcons.glyphMap} 
+                      size={selectedBadge.icon.size || 60} 
+                      color={selectedBadge.icon.color || '#FFFFFF'} 
+                    />
+                  ) : (
+                    <Text style={{fontSize:60, marginBottom:10}}>🏆</Text>
+                  )}
+                </View>
                 <Text style={styles.modalBadgeName}>{t('stats.badge_' + badgeKey(selectedBadge.name), {defaultValue: selectedBadge.name})}</Text>
                 <Text style={styles.modalBadgeDescription}>{t('stats.badge_' + badgeKey(selectedBadge.name) + '_desc', {defaultValue: selectedBadge.description})}</Text>
                 <Text style={styles.modalBadgeStatus}>
@@ -573,37 +696,46 @@ const styles = StyleSheet.create({
     marginHorizontal: 40,
     borderWidth: 1,
     borderColor: 'rgba(198, 231, 226, 0.2)',
+    width: 300,
+    height: 350,
+    justifyContent: 'center',
   },
-  modalBadgeIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+  modalBadgeIconContainer: {
+    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBadgeName: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#C6E7E2',
-    marginBottom: 8,
+    marginBottom: 15,
+    textAlign: 'center',
   },
   modalBadgeDescription: {
     fontSize: 16,
     color: 'rgba(198, 231, 226, 0.7)',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 25,
+    paddingHorizontal: 10,
   },
   modalBadgeStatus: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#FD8B5A',
-    marginBottom: 20,
+    marginBottom: 30,
+    fontWeight: 'bold',
   },
   modalCloseButton: {
     backgroundColor: '#FD8B5A',
     borderRadius: 8,
-    paddingHorizontal: 24,
+    paddingHorizontal: 30,
     paddingVertical: 12,
+    width: 150,
+    alignItems: 'center',
   },
   modalCloseText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
-}); 
+});

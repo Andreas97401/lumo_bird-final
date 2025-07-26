@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Animated, Dimensions, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Text } from '../components/Text';
 
 const { width, height } = Dimensions.get('window');
@@ -16,6 +17,8 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
   const router = useRouter();
@@ -38,11 +41,12 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert(t('login.error'), t('login.fill_all_fields'));
+      setErrorMessage(t('login.fill_all_fields'));
       return;
     }
 
     setIsLoading(true);
+    setErrorMessage('');
     try {
       const result = await signIn(email, password);
       
@@ -50,7 +54,7 @@ export default function LoginScreen() {
         // Récupérer l'utilisateur
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-          Alert.alert(t('login.error'), t('login.user_not_found'));
+          setErrorMessage(t('login.user_not_found'));
           setIsLoading(false);
           return;
         }
@@ -61,7 +65,7 @@ export default function LoginScreen() {
           .eq('id', user.id)
           .single();
         if (profileError) {
-          Alert.alert(t('login.error'), t('login.profile_not_found'));
+          setErrorMessage(t('login.profile_not_found'));
           setIsLoading(false);
           return;
         }
@@ -71,10 +75,10 @@ export default function LoginScreen() {
           router.push('/HomeScreen');
         }
       } else {
-        Alert.alert(t('login.error'), t('login.login_error', { error: result.error }));
+        setErrorMessage(t('login.login_error', { error: result.error }));
       }
     } catch (error) {
-      Alert.alert(t('login.error'), t('login.unknown_error'));
+      setErrorMessage(t('login.unknown_error'));
       console.error('Erreur handleLogin:', error);
     } finally {
       setIsLoading(false);
@@ -107,14 +111,32 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <TextInput
-              style={styles.input}
-              placeholder={t('login.password')}
-              placeholderTextColor="#C6E7E2"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <View style={{position: 'relative'}}>
+              <TextInput
+                style={styles.input}
+                placeholder={t('login.password')}
+                placeholderTextColor="#C6E7E2"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setErrorMessage('');
+                }}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                style={{position: 'absolute', right: 15, top: 15}}
+                onPress={() => setShowPassword(!showPassword)}
+                accessibilityLabel={showPassword ? t('login.hide_password') : t('login.show_password')}
+              >
+                <MaterialIcons
+                  name={showPassword ? 'visibility' : 'visibility-off'}
+                  size={24}
+                  color="#C6E7E2"
+                />
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity 
               style={[styles.button, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
@@ -124,6 +146,7 @@ export default function LoginScreen() {
                 {isLoading ? t('login.loading') : t('login.login_button')}
               </Text>
             </TouchableOpacity>
+            {errorMessage ? <Text accessibilityRole="alert" style={{color: 'red', marginTop: 10, textAlign: 'center'}}>{errorMessage}</Text> : null}
             <TouchableOpacity style={styles.switchButton} onPress={handleSignup}>
               <Text style={styles.switchButtonText}>{t('login.no_account')}</Text>
             </TouchableOpacity>
@@ -247,4 +270,4 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     zIndex: 10,
   },
-}); 
+});
