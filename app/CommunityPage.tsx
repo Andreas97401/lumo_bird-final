@@ -14,8 +14,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  ScrollView
+  View
 } from 'react-native';
 import BottomNavBar from '../components/BottomNavBar';
 import RolesAttributionModal from '../components/RolesAttributionModal';
