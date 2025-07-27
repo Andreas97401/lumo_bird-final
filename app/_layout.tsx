@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthProvider } from '../components/AuthProvider';
 import { useSettings } from '../hooks/useSettings';
 import '../lib/i18n';
+import { NotificationService } from '../lib/notifications';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -19,10 +20,32 @@ export default function RootLayout() {
   });
   const { language } = useSettings();
   const { i18n } = useTranslation();
+  
   // Synchronisation globale de la langue
   React.useEffect(() => {
     if (language) i18n.changeLanguage(language);
   }, [language]);
+
+  // Initialiser les notifications
+  React.useEffect(() => {
+    const initializeNotifications = async () => {
+      try {
+        // Enregistrer pour les notifications push
+        const token = await NotificationService.registerForPushNotifications();
+        if (token) {
+          console.log('Notifications initialisées avec succès');
+        }
+        
+        // Configurer les listeners
+        const cleanup = NotificationService.setupNotificationListeners();
+        return cleanup;
+      } catch (error) {
+        console.error('Erreur lors de l\'initialisation des notifications:', error);
+      }
+    };
+
+    initializeNotifications();
+  }, []);
 
   if (!loaded) {
     return null;
@@ -102,7 +125,34 @@ export default function RootLayout() {
                 freezeOnBlur: false,
               }} 
             />
-            <Stack.Screen name="+not-found" />
+            <Stack.Screen 
+              name="HelpSupport" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="PrivacyPolicy" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="TermsOfUse" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="GroupPage" 
+              options={{ 
+                headerShown: false,
+                freezeOnBlur: false,
+              }} 
+            />
           </Stack>
           <StatusBar style="auto" />
         </AuthProvider>

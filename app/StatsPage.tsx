@@ -1,5 +1,6 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import i18next from 'i18next';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -13,8 +14,6 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import BottomNavBar from '../components/BottomNavBar';
 import { SettingsButton } from '../components/SettingsButton';
 import { Text } from '../components/Text';
@@ -105,6 +104,7 @@ export default function StatsPage() {
   const [loadingGoal, setLoadingGoal] = useState(true);
   const [completedLevels, setCompletedLevels] = useState(0);
   const [completedQuests, setCompletedQuests] = useState(0);
+  const [completedObjectives, setCompletedObjectives] = useState(0);
   const [maxLevel, setMaxLevel] = useState(0);
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -209,6 +209,14 @@ export default function StatsPage() {
                 // Quêtes complétées = (X - 1) × 2
                 const questsCompleted = levelsCompleted * 2;
                 setCompletedQuests(questsCompleted);
+                
+                // Objectifs accomplis : +1 seulement quand le niveau actuel = niveau total (objectif terminé)
+                // Pour l'instant, on compte les objectifs terminés basés sur le niveau actuel vs niveau max
+                let objectivesCompleted = 0;
+                if (currentLevel >= maxLevelFound) {
+                  objectivesCompleted = 1; // Un objectif terminé
+                }
+                setCompletedObjectives(objectivesCompleted);
               }
             }
           }
@@ -312,6 +320,8 @@ export default function StatsPage() {
                 displayValue = completedQuests.toString();
               } else if (stat.label === 'stats.levels_done') {
                 displayValue = completedLevels.toString();
+              } else if (stat.label === 'stats.objectives_done') {
+                displayValue = completedObjectives.toString();
               } else if (stat.label === 'stats.current_difficulty') {
                 // Affiche toujours 'extrême' sans traduction
                 displayValue = 'extrême';

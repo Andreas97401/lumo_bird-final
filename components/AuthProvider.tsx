@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
+import { NotificationService } from '../lib/notifications';
 
 interface AuthProviderProps {
   children: React.ReactNode;
@@ -14,6 +15,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated && user) {
+        // Sauvegarder le token push pour l'utilisateur connecté
+        const savePushToken = async () => {
+          try {
+            const token = await NotificationService.registerForPushNotifications();
+            if (token && user.id) {
+              await NotificationService.savePushToken(user.id, token);
+              console.log('Token push sauvegardé pour l\'utilisateur');
+            }
+          } catch (error) {
+            console.error('Erreur lors de la sauvegarde du token push:', error);
+          }
+        };
+        
+        savePushToken();
+
         // Utilisateur connecté - vérifier s'il doit aller à l'onboarding
         if (profile?.first_connection) {
           console.log('Première connexion détectée, redirection vers OnboardingScreen');

@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import BottomNavBar from '../components/BottomNavBar';
 import RolesAttributionModal from '../components/RolesAttributionModal';
+import { NotificationService } from '../lib/notifications';
 import { searchUsersByPseudoOrEmail, supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
@@ -129,7 +130,7 @@ export default function CommunityPage() {
   const [popAnim, setPopAnim] = useState<Record<string, Animated.Value>>({}); // pour micro-interaction pop
   const modalAnim = useRef(new Animated.Value(0)).current;
   // Ajoute un état pour la modale d'ami
-  const [selectedFriend, setSelectedFriend] = useState<{ id: string; name: string } | null>(null);
+  const [selectedFriend, setSelectedFriend] = useState<{ id: string; name: string; requestId: string } | null>(null);
   const [showFriendModal, setShowFriendModal] = useState(false);
   const modalPopAnim = useRef(new Animated.Value(0.95)).current;
   const [toast, setToast] = useState<string | null>(null);
@@ -147,6 +148,14 @@ export default function CommunityPage() {
 
   // Pour garder le nom affiché lors du passage de pending à accepted
   const [pendingNames, setPendingNames] = useState<Record<string, string>>({});
+
+  // Ajout état pour le pop-up de confirmation de suppression d'ami
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteFriendId, setPendingDeleteFriendId] = useState<string | null>(null);
+
+  // Ajout état pour stocker les stats de l'ami sélectionné
+  const [friendStats, setFriendStats] = useState<any | null>(null);
+  const [loadingFriendStats, setLoadingFriendStats] = useState(false);
 
   // Fonction pour charger les profils des utilisateurs concernés
   async function fetchUserProfiles(friendRequests: any[]) {
@@ -655,7 +664,16 @@ export default function CommunityPage() {
                     {isAccepted && (
                       <View style={styles.friendCard}>
                         <Pressable
-                          onPress={() => { setSelectedFriend(item); setShowFriendModal(true); }}
+                          onPress={() => { 
+                            // Déterminer l'ID utilisateur de l'ami (pas l'ID de la relation)
+                            const friendUserId = item.from_user === currentUserId ? item.to_user : item.from_user;
+                            setSelectedFriend({ 
+                              id: friendUserId, 
+                              name: friendName || 'Ami',
+                              requestId: item.id // ID de la relation d'amitié pour la suppression
+                            }); 
+                            setShowFriendModal(true); 
+                          }}
                           style={{
                             flex: 1,
                             flexDirection: 'row',
@@ -678,29 +696,7 @@ export default function CommunityPage() {
                               pressed && styles.btnPressed,
                               cooldownNotif[item.id] && { opacity: 0.4 }, // Ajouté : assombrir uniquement ce bouton
                             ]}
-                            onPress={() => {
-                              let opacity = toastOpacityByCard[`${item.id}-notif`];
-                              if (!opacity) {
-                                opacity = new Animated.Value(1);
-                              } else {
-                                opacity.setValue(1);
-                              }
-                              setToastOpacityByCard(prev => ({ ...prev, [`${item.id}-notif`]: opacity }));
-                              setToastByCard(prev => ({ ...prev, [`${item.id}-notif`]: 'Félicitations envoyées !' }));
-                              if (toastTimeoutsRef.current[`${item.id}-notif`]) {
-                                clearTimeout(toastTimeoutsRef.current[`${item.id}-notif`]);
-                              }
-                              toastTimeoutsRef.current[`${item.id}-notif`] = setTimeout(() => {
-                                Animated.timing(opacity, {
-                                  toValue: 0,
-                                  duration: 400,
-                                  useNativeDriver: true,
-                                }).start(() => setToastByCard(prev => ({ ...prev, [`${item.id}-notif`]: null })));
-                                delete toastTimeoutsRef.current[`${item.id}-notif`];
-                              }, 1000);
-                              setCooldownNotif(prev => ({ ...prev, [item.id]: true }));
-                              setTimeout(() => setCooldownNotif(prev => ({ ...prev, [item.id]: false })), 3000);
-                            }}
+                            onPress={handleNotify}
                             accessibilityLabel="Féliciter"
                             disabled={!!cooldownNotif[item.id] || false} // Supprimé globalCooldown
                             hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
@@ -713,30 +709,7 @@ export default function CommunityPage() {
                               pressed && styles.btnPressed,
                               cooldownMotivate[item.id] && { opacity: 0.4 }, // Ajouté : assombrir uniquement ce bouton
                             ]}
-                            onPress={() => {
-                              let opacity = toastOpacityByCard[`${item.id}-motivate`];
-                              if (!opacity) {
-                                opacity = new Animated.Value(1);
-                              } else {
-                                opacity.setValue(1);
-                              }
-                              setToastOpacityByCard(prev => ({ ...prev, [`${item.id}-motivate`]: opacity }));
-                              setToastByCard(prev => ({ ...prev, [`${item.id}-motivate`]: 'Message de motivation envoyé !' }));
-                              setTimeout(() => setCooldownMotivate(prev => ({ ...prev, [String(item.id)]: false })), 5000);
-                              if (toastTimeoutsRef.current[`${item.id}-motivate`]) {
-                                clearTimeout(toastTimeoutsRef.current[`${item.id}-motivate`]);
-                              }
-                              toastTimeoutsRef.current[`${item.id}-motivate`] = setTimeout(() => {
-                                Animated.timing(opacity, {
-                                  toValue: 0,
-                                  duration: 400,
-                                  useNativeDriver: true,
-                                }).start(() => setToastByCard(prev => ({ ...prev, [`${item.id}-motivate`]: null })));
-                                delete toastTimeoutsRef.current[`${item.id}-motivate`];
-                              }, 1000);
-                              setCooldownMotivate(prev => ({ ...prev, [item.id]: true }));
-                              setTimeout(() => setCooldownMotivate(prev => ({ ...prev, [item.id]: false })), 3000);
-                            }}
+                            onPress={handleMotivate}
                             accessibilityLabel="Motiver"
                             disabled={!!cooldownMotivate[item.id] || false} // Supprimé globalCooldown
                             hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
@@ -749,30 +722,7 @@ export default function CommunityPage() {
                               pressed && styles.btnPressed,
                               cooldownWake[item.id] && { opacity: 0.4 }, // Ajouté : assombrir uniquement ce bouton
                             ]}
-                            onPress={() => {
-                              let opacity = toastOpacityByCard[`${item.id}-wake`];
-                              if (!opacity) {
-                                opacity = new Animated.Value(1);
-                              } else {
-                                opacity.setValue(1);
-                              }
-                              setToastOpacityByCard(prev => ({ ...prev, [`${item.id}-wake`]: opacity }));
-                              setToastByCard(prev => ({ ...prev, [`${item.id}-wake`]: 'Réveil envoyé !' }));
-                              setTimeout(() => setCooldownWake(prev => ({ ...prev, [String(item.id)]: false })), 5000);
-                              if (toastTimeoutsRef.current[`${item.id}-wake`]) {
-                                clearTimeout(toastTimeoutsRef.current[`${item.id}-wake`]);
-                              }
-                              toastTimeoutsRef.current[`${item.id}-wake`] = setTimeout(() => {
-                                Animated.timing(opacity, {
-                                  toValue: 0,
-                                  duration: 400,
-                                  useNativeDriver: true,
-                                }).start(() => setToastByCard(prev => ({ ...prev, [`${item.id}-wake`]: null })));
-                                delete toastTimeoutsRef.current[`${item.id}-wake`];
-                              }, 1000);
-                              setCooldownWake(prev => ({ ...prev, [item.id]: true }));
-                              setTimeout(() => setCooldownWake(prev => ({ ...prev, [item.id]: false })), 3000);
-                            }}
+                            onPress={handleWake}
                             accessibilityLabel="Réveiller"
                             disabled={!!cooldownWake[item.id] || false} // Supprimé globalCooldown
                             hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
@@ -954,10 +904,32 @@ export default function CommunityPage() {
   const [toastByCard, setToastByCard] = useState<{ [id: string]: string | null }>({});
 
   // Toast personnalisé pour chaque action
-  const handleNotify = () => {
+  const handleNotify = async () => {
     // if (globalCooldown) return; // Supprimé
     // setGlobalCooldown(true); // Supprimé
     // setTimeout(() => setGlobalCooldown(false), 5000); // Supprimé
+    
+    if (!selectedFriend || !currentUserId) return;
+    
+    // Envoyer la notification push
+    try {
+      const fromUserName = userProfiles[currentUserId] || 'Un ami';
+      const success = await NotificationService.sendNotificationToFriend(
+        currentUserId,
+        fromUserName,
+        selectedFriend.id,
+        'congratulation'
+      );
+      
+      if (success) {
+        console.log('Notification de félicitations envoyée avec succès');
+      } else {
+        console.log('Échec de l\'envoi de la notification');
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'envoi de la notification:', error);
+    }
+    
     let opacity = toastOpacityByCard[`${selectedFriend?.id || ''}-notif`];
     if (!opacity) {
       opacity = new Animated.Value(1);
@@ -980,10 +952,32 @@ export default function CommunityPage() {
     setCooldownNotif(prev => ({ ...prev, [selectedFriend?.id || '']: true }));
     setTimeout(() => setCooldownNotif(prev => ({ ...prev, [selectedFriend?.id || '']: false })), 3000);
   };
-  const handleMotivate = () => {
+  const handleMotivate = async () => {
     // if (globalCooldown) return; // Supprimé
     // setGlobalCooldown(true); // Supprimé
     // setTimeout(() => setGlobalCooldown(false), 5000); // Supprimé
+    
+    if (!selectedFriend || !currentUserId) return;
+    
+    // Envoyer la notification push
+    try {
+      const fromUserName = userProfiles[currentUserId] || 'Un ami';
+      const success = await NotificationService.sendNotificationToFriend(
+        currentUserId,
+        fromUserName,
+        selectedFriend.id,
+        'motivation'
+      );
+      
+      if (success) {
+        console.log('Notification de motivation envoyée avec succès');
+      } else {
+        console.log('Échec de l\'envoi de la notification');
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'envoi de la notification:', error);
+    }
+    
     let opacity = toastOpacityByCard[`${selectedFriend?.id || ''}-motivate`];
     if (!opacity) {
       opacity = new Animated.Value(1);
@@ -1007,10 +1001,32 @@ export default function CommunityPage() {
     setCooldownMotivate(prev => ({ ...prev, [selectedFriend?.id || '']: true }));
     setTimeout(() => setCooldownMotivate(prev => ({ ...prev, [selectedFriend?.id || '']: false })), 3000);
   };
-  const handleWake = () => {
+  const handleWake = async () => {
     // if (globalCooldown) return; // Supprimé
     // setGlobalCooldown(true); // Supprimé
     // setTimeout(() => setGlobalCooldown(false), 5000); // Supprimé
+    
+    if (!selectedFriend || !currentUserId) return;
+    
+    // Envoyer la notification push
+    try {
+      const fromUserName = userProfiles[currentUserId] || 'Un ami';
+      const success = await NotificationService.sendNotificationToFriend(
+        currentUserId,
+        fromUserName,
+        selectedFriend.id,
+        'wake'
+      );
+      
+      if (success) {
+        console.log('Notification de réveil envoyée avec succès');
+      } else {
+        console.log('Échec de l\'envoi de la notification');
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'envoi de la notification:', error);
+    }
+    
     let opacity = toastOpacityByCard[`${selectedFriend?.id || ''}-wake`];
     if (!opacity) {
       opacity = new Animated.Value(1);
@@ -1121,6 +1137,134 @@ export default function CommunityPage() {
   // Ajoute un id unique à chaque rôle pour le composant RolesAttributionModal
   const rolesWithId = rolesData.map((r, idx) => ({ ...r, id: r.role + '_' + idx }));
 
+  // Fonction pour charger les stats d'un ami
+  async function fetchFriendStats(friendId: string) {
+    setLoadingFriendStats(true);
+    try {
+      const { data: goals, error } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', friendId)
+        .order('id', { ascending: false });
+      if (error || !goals || goals.length === 0) {
+        setFriendStats(null);
+        setLoadingFriendStats(false);
+        return;
+      }
+      const currentGoal = goals[0]; // Objectif le plus récent pour les stats actuelles
+      let levelsData = null;
+      try {
+        if (currentGoal.levels && typeof currentGoal.levels === 'string') {
+          levelsData = JSON.parse(currentGoal.levels);
+        } else if (currentGoal.levels) {
+          levelsData = currentGoal.levels;
+        }
+      } catch (e) {
+        levelsData = null;
+      }
+      
+      // Niveau actuel
+      let niveau = 1;
+      let niveauTotal = 1;
+      let quetes = 0;
+      let objectifs = 0;
+      let difficulte = 'Inconnu';
+      
+            // Calculer le niveau total en regardant la dernière ligne de la colonne levels
+      // Parcourir tous les objectifs pour trouver le niveau le plus élevé
+      console.log('=== DEBUG fetchFriendStats ===');
+      console.log('Nombre d\'objectifs trouvés:', goals.length);
+      
+      for (const goal of goals) {
+        console.log('Objectif ID:', goal.id, 'Titre:', goal.titre);
+        console.log('Colonne levels brute:', goal.levels);
+        
+        let goalLevelsData = null;
+        try {
+          if (goal.levels && typeof goal.levels === 'string') {
+            goalLevelsData = JSON.parse(goal.levels);
+            console.log('Levels parsé (string):', goalLevelsData);
+          } else if (goal.levels) {
+            goalLevelsData = goal.levels;
+            console.log('Levels déjà un objet:', goalLevelsData);
+          }
+        } catch (e) {
+          console.log('Erreur parsing levels:', e);
+          continue; // Passer à l'objectif suivant si erreur de parsing
+        }
+        
+        if (goalLevelsData && Array.isArray(goalLevelsData) && goalLevelsData.length > 0) {
+          console.log('Tableau levels valide, longueur:', goalLevelsData.length);
+          
+          // Parcourir tous les éléments du tableau principal pour trouver le niveau le plus élevé
+          for (const levelGroup of goalLevelsData) {
+            if (levelGroup && levelGroup.levels && Array.isArray(levelGroup.levels)) {
+              // Parcourir les niveaux dans ce groupe
+              for (const level of levelGroup.levels) {
+                if (level && level.level_number) {
+                  const levelNumber = parseInt(level.level_number, 10);
+                  console.log('Level number trouvé:', levelNumber);
+                  if (!isNaN(levelNumber) && levelNumber > niveauTotal) {
+                    niveauTotal = levelNumber;
+                    console.log('Nouveau niveau total:', niveauTotal);
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          console.log('LevelsData invalide ou vide');
+        }
+      }
+      console.log('Niveau total final:', niveauTotal);
+      console.log('=== FIN DEBUG ===');
+      
+      if (currentGoal.current_level) {
+        const levelParts = currentGoal.current_level.split('_');
+        if (levelParts.length === 2) {
+          const currentLevel = parseInt(levelParts[0], 10);
+          if (!isNaN(currentLevel)) {
+            niveau = currentLevel;
+            quetes = Math.max(0, currentLevel - 1) * 2;
+            // Objectifs : +1 seulement quand le niveau actuel = niveau total (objectif terminé)
+            objectifs = (currentLevel >= niveauTotal) ? 1 : 0;
+          }
+        }
+      }
+      // Difficulté (exemple, à adapter selon ta logique)
+      if (currentGoal.difficulty) {
+        difficulte = currentGoal.difficulty;
+      } else if (niveau < 3) {
+        difficulte = 'Débutant';
+      } else if (niveau < 6) {
+        difficulte = 'Intermédiaire';
+      } else {
+        difficulte = 'Avancé';
+      }
+      setFriendStats({ 
+        niveau, 
+        niveauTotal, 
+        quetes, 
+        objectifs, 
+        difficulte,
+        objectifName: currentGoal.titre || 'Objectif en cours' // Ajout du nom de l'objectif depuis la colonne titre
+      });
+    } catch (e) {
+      setFriendStats(null);
+    } finally {
+      setLoadingFriendStats(false);
+    }
+  }
+
+  // Charger les stats à l'ouverture du modal d'ami
+  useEffect(() => {
+    if (showFriendModal && selectedFriend) {
+      fetchFriendStats(selectedFriend.id);
+    } else {
+      setFriendStats(null);
+    }
+  }, [showFriendModal, selectedFriend]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Header */}
@@ -1150,20 +1294,26 @@ export default function CommunityPage() {
                 <FontAwesome5 name="bullseye" size={20} color="#fff" style={{ marginRight: 6 }} />
                 <Text style={styles.friendModalObjectiveText}>Objectif en cours</Text>
                 </View>
-              <Text style={styles.friendModalObjectiveValue}>Courir 5km</Text>
+              <Text style={[styles.friendModalObjectiveValue, { textAlign: 'center' }]}>
+                {friendStats?.objectifName || 'Aucun objectif'}
+              </Text>
                 </View>
             <View style={styles.friendModalStatsCard}>
+              {loadingFriendStats ? (
+                <Text style={{ color: '#fff', textAlign: 'center' }}>Chargement...</Text>
+              ) : friendStats ? (
+                <>
               <View style={styles.friendModalStatsRow}>
                 <View style={styles.friendModalMiniCard}>
                   <View style={styles.friendModalStatValueRow}>
-                    <Text style={styles.friendModalStatValue}>2</Text>
+                        <Text style={styles.friendModalStatValue}>{friendStats.niveau}</Text>
                     <Ionicons name="star" size={20} color="#F48B5A" style={styles.friendModalStatIconRight} />
                 </View>
-                  <Text style={styles.friendModalStatLabel}>Niveau</Text>
+                  <Text style={styles.friendModalStatLabel}>Niveau actuel</Text>
             </View>
                 <View style={styles.friendModalMiniCard}>
                   <View style={styles.friendModalStatValueRow}>
-                    <Text style={styles.friendModalStatValue}>5</Text>
+                        <Text style={styles.friendModalStatValue}>{friendStats.niveauTotal}</Text>
                     <Ionicons name="trophy" size={20} color="#FFD700" style={styles.friendModalStatIconRight} />
           </View>
                   <Text style={styles.friendModalStatLabel}>Niveau total</Text>
@@ -1173,14 +1323,14 @@ export default function CommunityPage() {
               <View style={styles.friendModalStatsRow}>
                 <View style={styles.friendModalMiniCard}>
                   <View style={styles.friendModalStatValueRow}>
-                    <Text style={styles.friendModalStatValue}>12</Text>
+                        <Text style={styles.friendModalStatValue}>{friendStats.quetes}</Text>
                     <Ionicons name="flag-outline" size={20} color="#71ABA4" style={styles.friendModalStatIconRight} />
               </View>
-                  <Text style={styles.friendModalStatLabel}>Quêtes</Text>
+                  <Text style={styles.friendModalStatLabel}>Quêtes complétées</Text>
               </View>
                 <View style={styles.friendModalMiniCard}>
                   <View style={styles.friendModalStatValueRow}>
-                    <Text style={styles.friendModalStatValue}>3</Text>
+                        <Text style={styles.friendModalStatValue}>{friendStats.objectifs}</Text>
                     <FontAwesome5 name="bullseye" size={18} color="#F48B5A" style={styles.friendModalStatIconRight} />
             </View>
                   <Text style={styles.friendModalStatLabel}>Objectifs</Text>
@@ -1188,9 +1338,13 @@ export default function CommunityPage() {
               </View>
               <View style={styles.friendModalDifficultyBox}>
                 <Ionicons name="flash-outline" size={22} color="#FF9800" style={styles.friendModalStatIcon} />
-                <Text style={styles.friendModalDifficultyValue}>Intermédiaire</Text>
+                    <Text style={styles.friendModalDifficultyValue}>{friendStats.difficulte}</Text>
               </View>
               <Text style={styles.friendModalDifficultyLabel}>Difficulté</Text>
+                </>
+              ) : (
+                <Text style={{ color: '#fff', textAlign: 'center' }}>Aucune statistique trouvée</Text>
+              )}
               </View>
             <View style={{ alignItems: 'center', marginTop: 35 }}>
               <View style={styles.friendModalActionRow}>
@@ -1247,7 +1401,12 @@ export default function CommunityPage() {
                 </Animated.View>
             </View>
           </View>
-          <TouchableOpacity style={styles.friendModalDeleteBtn} accessibilityLabel="Supprimer l'ami" onPress={() => selectedFriend && deleteFriend(selectedFriend.id)}>
+          <TouchableOpacity style={styles.friendModalDeleteBtn} accessibilityLabel="Supprimer l'ami" onPress={() => {
+  if (selectedFriend) {
+    setPendingDeleteFriendId(selectedFriend.requestId);
+    setShowDeleteConfirm(true);
+  }
+}}>
             <Ionicons name="trash-outline" size={20} color="#fff" />
             <Text style={styles.friendModalDeleteText}>Supprimer l'ami</Text>
           </TouchableOpacity>
@@ -1460,6 +1619,36 @@ export default function CommunityPage() {
             >
               <Text style={styles.friendModalCloseText}>Fermer</Text>
             </TouchableOpacity>
+          </Animated.View>
+        </View>
+      )}
+      {/* Pop-up de confirmation suppression ami */}
+      {showDeleteConfirm && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999, justifyContent: 'center', alignItems: 'center' }} pointerEvents="box-none">
+          {/* Overlay profondeur */}
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.66)' }} />
+          <Animated.View style={styles.friendModalBox} pointerEvents="auto">
+            <Text style={styles.groupModalTitle}>Confirmation</Text>
+            <Text style={{ color: '#fff', fontSize: 17, marginBottom: 18, textAlign: 'center', fontFamily: 'Righteous' }}>
+              Êtes-vous sûr de vouloir supprimer cet ami ? Cette action est irréversible.
+            </Text>
+            <View style={styles.groupModalBtnRow}>
+              <TouchableOpacity style={styles.groupModalRedBtn} onPress={() => {
+                setShowDeleteConfirm(false);
+                setPendingDeleteFriendId(null);
+              }} accessibilityLabel="Annuler">
+                <Text style={styles.groupModalRedText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.groupModalGreenBtn} onPress={async () => {
+                if (pendingDeleteFriendId) {
+                  await deleteFriend(pendingDeleteFriendId);
+                  setShowDeleteConfirm(false);
+                  setPendingDeleteFriendId(null);
+                }
+              }} accessibilityLabel="Confirmer la suppression">
+                <Text style={styles.groupModalGreenText}>Confirmer</Text>
+              </TouchableOpacity>
+            </View>
           </Animated.View>
         </View>
       )}

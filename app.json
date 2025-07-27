@@ -3,6 +3,11 @@
     "name": "Lumo-Bird-Final",
     "slug": "Lumo-Bird-Final",
     "version": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "be924fb9-777f-4c6f-aaa3-cceafc368a1c"
+      }
+    },
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "scheme": "lumobirdfinal",
