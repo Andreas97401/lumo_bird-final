@@ -388,9 +388,6 @@ export default function StatsPage() {
 
         {/* Bouton Historique ergonomique */}
       </ScrollView>
-      <Text style={{color:'#fff', backgroundColor:'#FD8B5A', padding:8, borderRadius:8, margin:10}}>
-        Debug i18n — Langue active : {i18next.language} | Clé : stats.intermediaire | Traduction : {t('stats.intermediaire')}
-      </Text>
       </Animated.View>
 
       <BottomNavBar selectedIndex={selectedTab} onSelect={handleTabSelect} />

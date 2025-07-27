@@ -82,6 +82,37 @@ interface Group {
   created_at: string;
 }
 
+
+async function fetchGroupMembers(groupId: string) {
+    const { data: groupMembers, error: memberError } = await supabase
+      .from('group_members')
+      .select('user_id')
+      .eq('group_id', groupId);
+
+    if (memberError) {
+      console.error('Erreur lors de la récupération des membres:', memberError);
+      return [];
+    }
+
+    const memberIds = groupMembers?.map(gm => gm.user_id) || [];
+
+    if (memberIds.length === 0) {
+      return [];
+    }
+
+    const { data: profiles, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id, prenom')
+      .in('id', memberIds);
+
+    if (profileError) {
+      console.error('Erreur lors de la récupération des profils:', profileError);
+      return [];
+    }
+
+    return profiles?.map(profile => ({ id: profile.id, name: profile.prenom })) || [];
+  }
+
 export default function CommunityPage() {
   // Typage explicite des états
   const [friends, setFriends] = useState<any[]>([]); // sera rempli par Supabase
@@ -417,8 +448,10 @@ export default function CommunityPage() {
   const handleShowProfile = (friend: any) => {
     // router.push(`/profile/${friend.id}`)
   };
-  const handleViewGroup = (group: any) => {
+  const handleViewGroup = async (group: any) => {
     setSelectedGroup(group);
+    const members = await fetchGroupMembers(group.id);
+    setGroupMembers(members);
     setShowGroupDetailsModal(true);
   };
   // État pour la modale de création de groupe
@@ -1063,6 +1096,7 @@ export default function CommunityPage() {
   const [rolesData, setRolesData] = useState<Role[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [showGroupDetailsModal, setShowGroupDetailsModal] = useState(false);
+  const [groupMembers, setGroupMembers] = useState<any[]>([]);
 
   // Juste avant le rendu du modal des rôles :
   // Prépare la vraie liste d'amis acceptés pour le composant
@@ -1411,7 +1445,13 @@ export default function CommunityPage() {
 
             <View style={{ width: '100%', marginBottom: 20 }}>
               <Text style={[styles.sectionTitle, { color: '#FD8B5A', marginBottom: 8 }]}>Membres</Text>
-              {/* TODO: Ajouter la liste des membres */}
+              {groupMembers.length === 0 ? (
+                <Text style={{ color: '#fff' }}>Aucun membre dans ce groupe</Text>
+              ) : (
+                groupMembers.map(member => (
+                  <Text key={member.id} style={{ color: '#fff', fontSize: 16 }}>{member.name}</Text>
+                ))
+              )}
             </View>
 
             <TouchableOpacity 
